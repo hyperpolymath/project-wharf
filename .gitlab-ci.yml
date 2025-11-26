@@ -1,0 +1,173 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
+#
+# GitLab CI/CD Configuration for Project Wharf
+# RSR Compliant Pipeline
+
+stages:
+  - validate
+  - build
+  - test
+  - security
+  - release
+
+variables:
+  CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
+  RUSTFLAGS: "-D warnings"
+
+# Cache Cargo dependencies
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .cargo/
+    - target/
+
+# =============================================================================
+# VALIDATE STAGE
+# =============================================================================
+
+validate:docs:
+  stage: validate
+  image: alpine:latest
+  script:
+    - |
+      echo "Checking RSR documentation requirements..."
+      for file in README.adoc LICENSE.txt SECURITY.md CODE_OF_CONDUCT.adoc \
+                  CONTRIBUTING.adoc FUNDING.yml GOVERNANCE.adoc MAINTAINERS.md \
+                  .gitignore .gitattributes; do
+        if [ -f "$file" ]; then
+          echo "✓ $file"
+        else
+          echo "✗ $file (MISSING)"
+          exit 1
+        fi
+      done
+
+validate:wellknown:
+  stage: validate
+  image: alpine:latest
+  script:
+    - |
+      echo "Checking .well-known directory..."
+      for file in security.txt ai.txt provenance.json humans.txt; do
+        if [ -f ".well-known/$file" ]; then
+          echo "✓ .well-known/$file"
+        else
+          echo "✗ .well-known/$file (MISSING)"
+          exit 1
+        fi
+      done
+
+validate:spdx:
+  stage: validate
+  image: alpine:latest
+  script:
+    - |
+      echo "Checking SPDX headers..."
+      find . -name "*.rs" -not -path "./target/*" | while read file; do
+        if ! head -5 "$file" | grep -q "SPDX-License-Identifier"; then
+          echo "✗ Missing SPDX: $file"
+          exit 1
+        fi
+      done
+      echo "✓ All source files have SPDX headers"
+
+# =============================================================================
+# BUILD STAGE
+# =============================================================================
+
+build:rust:
+  stage: build
+  image: rust:latest
+  script:
+    - cargo build --release --workspace
+  artifacts:
+    paths:
+      - target/release/wharf
+      - target/release/yacht-agent
+    expire_in: 1 week
+
+build:check:
+  stage: build
+  image: rust:latest
+  script:
+    - cargo check --workspace
+
+# =============================================================================
+# TEST STAGE
+# =============================================================================
+
+test:unit:
+  stage: test
+  image: rust:latest
+  script:
+    - cargo test --workspace
+  coverage: '/^\d+\.\d+% coverage/'
+
+test:fmt:
+  stage: test
+  image: rust:latest
+  script:
+    - rustup component add rustfmt
+    - cargo fmt --check
+
+test:clippy:
+  stage: test
+  image: rust:latest
+  script:
+    - rustup component add clippy
+    - cargo clippy --workspace -- -D warnings
+
+# =============================================================================
+# SECURITY STAGE
+# =============================================================================
+
+security:audit:
+  stage: security
+  image: rust:latest
+  script:
+    - cargo install cargo-audit
+    - cargo audit
+  allow_failure: true
+
+security:secrets:
+  stage: security
+  image: alpine:latest
+  script:
+    - |
+      echo "Scanning for secrets..."
+      if grep -rE "(password|secret|api_key)\s*=" --include="*.rs" --include="*.toml" .; then
+        echo "⚠️ Potential secrets found"
+        exit 1
+      fi
+      echo "✓ No obvious secrets found"
+
+# =============================================================================
+# RELEASE STAGE
+# =============================================================================
+
+release:tag:
+  stage: release
+  image: rust:latest
+  script:
+    - echo "Creating release for ${CI_COMMIT_TAG}"
+  only:
+    - tags
+  artifacts:
+    paths:
+      - target/release/wharf
+      - target/release/yacht-agent
+
+# =============================================================================
+# SCHEDULED JOBS
+# =============================================================================
+
+dependency:update:
+  stage: security
+  image: rust:latest
+  script:
+    - cargo update
+    - cargo audit
+  only:
+    - schedules
+  allow_failure: true

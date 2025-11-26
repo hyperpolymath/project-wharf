@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
+#
+# Funding and Sponsorship Information
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+# Solidarity Economics Framework
+# We believe in sustainable, ethical funding for open source
+
+# Platform accounts
+github: hyperpolymath
+liberapay: hyperpolymath
+open_collective: wharf
+ko_fi: hyperpolymath
+
+# Custom sponsorship page
+custom:
+  - https://hyperpolymath.net/sponsor
+
+# Funding Philosophy
+#
+# Project Wharf follows the Solidarity Economics model:
+#
+# 1. **Transparency**: All funding is publicly documented
+# 2. **Sustainability**: We seek recurring sponsorship over one-time donations
+# 3. **Fairness**: Contributors are compensated based on contribution weight
+# 4. **Independence**: No single sponsor controls project direction
+#
+# Funds are used for:
+# - Security audits
+# - Infrastructure costs
+# - Contributor compensation
+# - Documentation and outreach
+#
+# Financial reports published quarterly in GOVERNANCE.adoc

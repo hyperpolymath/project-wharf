@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
+#
+# Pre-commit hook for Project Wharf
+# Runs before each commit to ensure code quality
+
+set -euo pipefail
+
+echo "🔍 Running pre-commit checks..."
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+FAILED=0
+
+# 1. Check for SPDX headers in new/modified files
+echo -n "Checking SPDX headers... "
+STAGED_RS=$(git diff --cached --name-only --diff-filter=ACM | grep '\.rs$' || true)
+for file in $STAGED_RS; do
+    if ! head -5 "$file" | grep -q "SPDX-License-Identifier"; then
+        echo -e "${RED}Missing SPDX header: $file${NC}"
+        FAILED=1
+    fi
+done
+if [ $FAILED -eq 0 ]; then
+    echo -e "${GREEN}OK${NC}"
+fi
+
+# 2. Rust formatting
+echo -n "Checking Rust formatting... "
+if command -v cargo &> /dev/null; then
+    if ! cargo fmt --check --quiet 2>/dev/null; then
+        echo -e "${RED}FAILED${NC}"
+        echo "Run 'cargo fmt' to fix formatting"
+        FAILED=1
+    else
+        echo -e "${GREEN}OK${NC}"
+    fi
+else
+    echo -e "${YELLOW}SKIP (cargo not found)${NC}"
+fi
+
+# 3. Rust linting
+echo -n "Checking Rust lints... "
+if command -v cargo &> /dev/null; then
+    if ! cargo clippy --quiet -- -D warnings 2>/dev/null; then
+        echo -e "${RED}FAILED${NC}"
+        echo "Run 'cargo clippy' to see issues"
+        FAILED=1
+    else
+        echo -e "${GREEN}OK${NC}"
+    fi
+else
+    echo -e "${YELLOW}SKIP (cargo not found)${NC}"
+fi
+
+# 4. Check for secrets
+echo -n "Checking for secrets... "
+PATTERNS=(
+    "PRIVATE KEY"
+    "password\s*="
+    "secret\s*="
+    "api_key\s*="
+    "AWS_SECRET"
+)
+for pattern in "${PATTERNS[@]}"; do
+    if git diff --cached --diff-filter=ACM | grep -iE "$pattern" > /dev/null 2>&1; then
+        echo -e "${RED}FAILED${NC}"
+        echo "Potential secret found matching: $pattern"
+        FAILED=1
+        break
+    fi
+done
+if [ $FAILED -eq 0 ]; then
+    echo -e "${GREEN}OK${NC}"
+fi
+
+# 5. Check shell scripts
+echo -n "Checking shell scripts... "
+STAGED_SH=$(git diff --cached --name-only --diff-filter=ACM | grep '\.sh$' || true)
+if [ -n "$STAGED_SH" ] && command -v shellcheck &> /dev/null; then
+    for file in $STAGED_SH; do
+        if ! shellcheck "$file" 2>/dev/null; then
+            echo -e "${RED}FAILED${NC}"
+            FAILED=1
+        fi
+    done
+    if [ $FAILED -eq 0 ]; then
+        echo -e "${GREEN}OK${NC}"
+    fi
+else
+    echo -e "${YELLOW}SKIP${NC}"
+fi
+
+# 6. Check JSON validity
+echo -n "Checking JSON files... "
+STAGED_JSON=$(git diff --cached --name-only --diff-filter=ACM | grep '\.json$' || true)
+for file in $STAGED_JSON; do
+    if ! python3 -m json.tool "$file" > /dev/null 2>&1; then
+        echo -e "${RED}Invalid JSON: $file${NC}"
+        FAILED=1
+    fi
+done
+if [ $FAILED -eq 0 ]; then
+    echo -e "${GREEN}OK${NC}"
+fi
+
+# Summary
+echo ""
+if [ $FAILED -eq 1 ]; then
+    echo -e "${RED}❌ Pre-commit checks failed${NC}"
+    echo "Fix the issues above and try again."
+    exit 1
+else
+    echo -e "${GREEN}✅ All pre-commit checks passed${NC}"
+    exit 0
+fi

@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
+#
+# Git Attributes Configuration
+# Ensures consistent behavior across platforms
+
+# Auto-detect text files and normalize line endings
+* text=auto
+
+# Source code - LF line endings
+*.rs text eol=lf
+*.toml text eol=lf
+*.ncl text eol=lf
+*.nix text eol=lf
+*.sh text eol=lf
+*.php text eol=lf
+*.py text eol=lf
+
+# Documentation - LF line endings
+*.md text eol=lf
+*.adoc text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+
+# Configuration
+*.conf text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+Justfile text eol=lf
+Containerfile text eol=lf
+Dockerfile text eol=lf
+
+# Templates (DNS zone files)
+*.tpl text eol=lf
+*.db text eol=lf
+*.zone text eol=lf
+
+# Binary files - no conversion
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.wasm binary
+
+# Archives - no conversion
+*.tar binary
+*.tar.gz binary
+*.zip binary
+
+# Diff configuration
+*.rs diff=rust
+*.md diff=markdown
+*.adoc diff=asciidoc
+
+# Merge strategies
+Cargo.lock merge=binary
+flake.lock merge=binary
+
+# Export ignore (not included in archives)
+.git* export-ignore
+.gitlab-ci.yml export-ignore
+.pre-commit-config.yaml export-ignore
+tests/ export-ignore

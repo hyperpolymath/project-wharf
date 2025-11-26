@@ -324,3 +324,140 @@ detect-env domain ip:
 recommend-template domain ip:
     @echo ">>> Analyzing {{domain}} on {{ip}}..."
     @just detect-env {{domain}} {{ip}}
+
+# ============================================================================
+# 12. RSR COMPLIANCE (Rhodium Standard Repository)
+# ============================================================================
+
+# Run all RSR compliance checks
+validate: validate-docs validate-spdx validate-security validate-wellknown
+    @echo ""
+    @echo "✅ RSR compliance validation complete!"
+
+# Check required documentation files
+validate-docs:
+    @echo ">>> Checking RSR documentation requirements..."
+    @FAILED=0; \
+    for file in README.adoc LICENSE.txt SECURITY.md CODE_OF_CONDUCT.adoc \
+                CONTRIBUTING.adoc FUNDING.yml GOVERNANCE.adoc MAINTAINERS.md \
+                .gitignore .gitattributes REVERSIBILITY.md CHANGELOG.md ROADMAP.md; do \
+        if [ -f "$$file" ]; then \
+            echo "  ✓ $$file"; \
+        else \
+            echo "  ✗ $$file (MISSING)"; \
+            FAILED=1; \
+        fi; \
+    done; \
+    if [ $$FAILED -eq 1 ]; then exit 1; fi
+
+# Check SPDX headers in source files
+validate-spdx:
+    @echo ">>> Checking SPDX headers..."
+    @FAILED=0; \
+    for file in $$(find . -name "*.rs" -o -name "*.sh" -o -name "*.nix" 2>/dev/null | grep -v target); do \
+        if ! head -5 "$$file" | grep -q "SPDX-License-Identifier"; then \
+            echo "  ✗ Missing SPDX: $$file"; \
+            FAILED=1; \
+        fi; \
+    done; \
+    if [ $$FAILED -eq 0 ]; then echo "  ✓ All source files have SPDX headers"; fi
+
+# Audit SPDX license compliance
+audit-licence:
+    @echo ">>> Auditing license compliance..."
+    @just validate-spdx
+    @echo ">>> Checking for incompatible licenses in dependencies..."
+    @cargo tree --prefix none 2>/dev/null | head -20 || echo "Run 'cargo build' first"
+
+# Check security-related files
+validate-security:
+    @echo ">>> Checking security requirements..."
+    @test -f SECURITY.md && echo "  ✓ SECURITY.md present" || echo "  ✗ SECURITY.md missing"
+    @test -f .well-known/security.txt && echo "  ✓ .well-known/security.txt present" || echo "  ✗ .well-known/security.txt missing"
+    @grep -q "Response SLA" SECURITY.md 2>/dev/null && echo "  ✓ SECURITY.md has Response SLA" || echo "  ✗ SECURITY.md missing Response SLA"
+
+# Check .well-known directory
+validate-wellknown:
+    @echo ">>> Checking .well-known directory..."
+    @for file in security.txt ai.txt consent-required.txt provenance.json humans.txt; do \
+        if [ -f ".well-known/$$file" ]; then \
+            echo "  ✓ .well-known/$$file"; \
+        else \
+            echo "  ✗ .well-known/$$file (MISSING)"; \
+        fi; \
+    done
+
+# Check link integrity (requires lychee)
+check-links:
+    @echo ">>> Checking link integrity..."
+    @if command -v lychee >/dev/null 2>&1; then \
+        lychee --verbose docs/ *.md *.adoc 2>/dev/null || echo "Some links may need attention"; \
+    else \
+        echo "  SKIP: lychee not installed (cargo install lychee)"; \
+    fi
+
+# Generate SBOM (Software Bill of Materials)
+sbom-generate:
+    @echo ">>> Generating SBOM..."
+    @mkdir -p dist
+    @if command -v cargo-sbom >/dev/null 2>&1; then \
+        cargo sbom > dist/sbom.spdx.json; \
+        echo "  ✓ SBOM generated at dist/sbom.spdx.json"; \
+    else \
+        echo "  SKIP: cargo-sbom not installed"; \
+        echo "  Install with: cargo install cargo-sbom"; \
+    fi
+
+# Full RSR audit report
+rsr-report:
+    @echo "╔══════════════════════════════════════════════════════════════╗"
+    @echo "║           RSR COMPLIANCE REPORT - Project Wharf              ║"
+    @echo "╚══════════════════════════════════════════════════════════════╝"
+    @echo ""
+    @echo "Category 1: Foundational Infrastructure"
+    @test -f flake.nix && echo "  ✓ Nix flakes" || echo "  ✗ Nix flakes"
+    @test -f Justfile && echo "  ✓ Justfile present" || echo "  ✗ Justfile missing"
+    @test -d configs && echo "  ✓ Nickel configs" || echo "  ✗ Nickel configs"
+    @echo ""
+    @echo "Category 2: Documentation"
+    @just validate-docs 2>/dev/null || true
+    @echo ""
+    @echo "Category 3: Security"
+    @just validate-security 2>/dev/null || true
+    @echo ""
+    @echo "Category 4: Architecture"
+    @test -f REVERSIBILITY.md && echo "  ✓ Reversibility documented" || echo "  ✗ Missing REVERSIBILITY.md"
+    @test -f docs/ARCHITECTURE.md && echo "  ✓ Architecture documented" || echo "  ✗ Missing ARCHITECTURE.md"
+    @echo ""
+    @echo "Category 7: Licensing"
+    @test -f LICENSE.txt && echo "  ✓ LICENSE.txt present" || echo "  ✗ Missing LICENSE.txt"
+    @grep -q "SPDX" LICENSE.txt 2>/dev/null && echo "  ✓ SPDX identified" || echo "  ✗ Not SPDX identified"
+    @echo ""
+    @echo "Category 10: Governance"
+    @test -f GOVERNANCE.adoc && echo "  ✓ Governance documented" || echo "  ✗ Missing GOVERNANCE.adoc"
+    @test -f CONTRIBUTING.adoc && echo "  ✓ Contributing guide" || echo "  ✗ Missing CONTRIBUTING.adoc"
+    @grep -q "Perimeter" CONTRIBUTING.adoc 2>/dev/null && echo "  ✓ TPCF documented" || echo "  ✗ TPCF not documented"
+    @echo ""
+    @echo "══════════════════════════════════════════════════════════════"
+
+# Setup git hooks
+setup-hooks:
+    @echo ">>> Setting up git hooks..."
+    git config core.hooksPath .githooks
+    @echo "  ✓ Git hooks configured to use .githooks/"
+
+# ============================================================================
+# 13. CI/CD SUPPORT
+# ============================================================================
+
+# Run CI pipeline locally
+ci: fmt-check lint test validate
+    @echo ">>> CI pipeline complete!"
+
+# Pre-release checklist
+pre-release version:
+    @echo ">>> Pre-release checklist for {{version}}..."
+    @just ci
+    @just rsr-report
+    @echo ""
+    @echo "Ready for release {{version}}? Run: git tag -s v{{version}}"

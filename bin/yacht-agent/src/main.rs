@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
+
 //! # Yacht Agent
 //!
 //! The runtime enforcer for Project Wharf - The Sovereign Web Hypervisor.

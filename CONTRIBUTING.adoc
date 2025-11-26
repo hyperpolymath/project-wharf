@@ -1,0 +1,246 @@
+= Contributing to Project Wharf
+:toc: left
+:icons: font
+
+Thank you for your interest in contributing to Project Wharf! This document
+outlines our contribution process and the Tri-Perimeter Contribution Framework (TPCF).
+
+== Tri-Perimeter Contribution Framework (TPCF)
+
+Contributions are organized into three perimeters based on trust level and
+expertise required.
+
+=== Perimeter 3: Community (Open)
+
+**Who**: Anyone can contribute at this level
+
+**What you can do**:
+
+* Report bugs via GitLab Issues
+* Suggest features via Discussions
+* Improve documentation (typos, clarity)
+* Add examples and tutorials
+* Translate documentation
+* Answer questions in Discussions
+
+**Process**:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a Merge Request
+5. Address review feedback
+
+=== Perimeter 2: Expert Contributors
+
+**Who**: Contributors who have demonstrated expertise and reliability
+
+**Eligibility** (meet 2+ criteria):
+
+* 5+ accepted Perimeter 3 contributions
+* Domain expertise (security, Rust, DNS, CMS)
+* Vouched by a Core maintainer
+
+**What you can do**:
+
+* Review Perimeter 3 contributions
+* Implement non-critical features
+* Write integration tests
+* Create adapters for new CMS platforms
+* Improve Nickel configurations
+
+**Process**:
+
+1. Request Perimeter 2 access via Issue
+2. Core maintainer reviews contribution history
+3. If approved, added to `@expert-contributors` group
+4. Can now approve Perimeter 3 MRs
+
+=== Perimeter 1: Core Maintainers
+
+**Who**: Trusted maintainers with deep project knowledge
+
+**Eligibility**:
+
+* Significant Perimeter 2 contributions
+* Demonstrated security awareness
+* Long-term commitment to the project
+* Unanimous approval by existing Core
+
+**What you can do**:
+
+* Merge to protected branches
+* Release new versions
+* Modify security-critical code
+* Change architecture decisions
+* Manage CI/CD pipelines
+
+**Process**:
+
+1. Nominated by existing Core maintainer
+2. 2-week community comment period
+3. Unanimous Core approval required
+4. Added to `@core-maintainers` group
+
+== Development Setup
+
+[source,bash]
+----
+# Clone the repository
+git clone https://gitlab.com/hyperpolymath/wharf.git
+cd wharf
+
+# Using Nix (recommended)
+nix develop
+
+# Or manually install dependencies
+# See README.adoc for requirements
+
+# Initialize
+just init
+
+# Run tests
+just test
+
+# Run lints
+just lint
+----
+
+== Commit Guidelines
+
+=== Commit Message Format
+
+We use Conventional Commits:
+
+[source]
+----
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+----
+
+**Types**:
+
+* `feat`: New feature
+* `fix`: Bug fix
+* `docs`: Documentation only
+* `style`: Formatting, no code change
+* `refactor`: Code change that neither fixes nor adds
+* `perf`: Performance improvement
+* `test`: Adding tests
+* `chore`: Maintenance tasks
+* `security`: Security-related changes
+
+**Example**:
+
+[source]
+----
+feat(db-proxy): add AST-based query filtering
+
+Implements SQL parsing using sqlparser crate to analyze queries
+and enforce database policies without fragile regex patterns.
+
+Closes #42
+----
+
+=== Signing Commits
+
+All commits must be signed:
+
+[source,bash]
+----
+# Configure GPG signing
+git config --global commit.gpgsign true
+git config --global user.signingkey YOUR_KEY_ID
+
+# Or use SSH signing
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519.pub
+----
+
+== SPDX Headers
+
+All source files must include SPDX headers:
+
+[source,rust]
+----
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2025 Your Name <email>
+----
+
+Run `just audit-licence` to verify compliance.
+
+== Code Style
+
+=== Rust
+
+* Follow `rustfmt` defaults
+* Use `clippy` with `-D warnings`
+* Document public APIs with `///`
+* Prefer `thiserror` for error types
+
+=== Nickel
+
+* Use consistent indentation (2 spaces)
+* Comment complex contracts
+* Group related fields
+
+=== Shell Scripts
+
+* Use `shellcheck`
+* Prefer `bash` with `set -euo pipefail`
+* Quote all variables
+
+== Testing
+
+=== Running Tests
+
+[source,bash]
+----
+# All tests
+just test
+
+# Specific crate
+cargo test -p wharf-core
+
+# With coverage
+just test-coverage
+----
+
+=== Test Requirements
+
+* Unit tests for all public functions
+* Integration tests for security-critical paths
+* Property-based tests for parsers (if applicable)
+
+== Security Contributions
+
+Security-related contributions require extra care:
+
+1. **Do not** disclose vulnerabilities in public Issues
+2. Follow the process in SECURITY.md
+3. Security fixes are reviewed by Core maintainers only
+4. Security changes require 2 Core approvals
+
+== Documentation
+
+* Update README.adoc for user-facing changes
+* Update inline docs for API changes
+* Add examples for new features
+* Keep CHANGELOG.md updated
+
+== Questions?
+
+* **General questions**: Open a Discussion
+* **Bug reports**: Open an Issue
+* **Security issues**: See SECURITY.md
+* **Contribution questions**: Tag `@hyperpolymath`
+
+== License
+
+By contributing, you agree that your contributions will be licensed under the
+MIT License. See LICENSE.txt for details.
+
+All contributions must include SPDX headers attributing your work.

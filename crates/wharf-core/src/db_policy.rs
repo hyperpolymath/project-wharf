@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
+
 //! Database Policy Engine
 //!
 //! This module implements the "Virtual Sharding" logic for the database proxy.

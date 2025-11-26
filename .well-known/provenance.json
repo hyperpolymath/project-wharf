@@ -1,0 +1,64 @@
+{
+  "$schema": "https://slsa.dev/provenance/v1",
+  "version": "1.0.0",
+  "metadata": {
+    "project": "wharf",
+    "description": "The Sovereign Web Hypervisor",
+    "repository": "https://gitlab.com/hyperpolymath/wharf",
+    "license": "MIT",
+    "spdx_id": "MIT"
+  },
+  "provenance": {
+    "builder": {
+      "id": "https://gitlab.com/hyperpolymath/wharf/-/runners"
+    },
+    "buildType": "https://gitlab.com/hyperpolymath/wharf/-/blob/main/.gitlab-ci.yml",
+    "invocation": {
+      "configSource": {
+        "uri": "git+https://gitlab.com/hyperpolymath/wharf",
+        "digest": {
+          "sha256": "placeholder-updated-on-release"
+        },
+        "entryPoint": ".gitlab-ci.yml"
+      }
+    },
+    "materials": [
+      {
+        "uri": "pkg:cargo/wharf-core@0.1.0",
+        "digest": {
+          "sha256": "placeholder-updated-on-release"
+        }
+      },
+      {
+        "uri": "pkg:cargo/wharf-cli@0.1.0",
+        "digest": {
+          "sha256": "placeholder-updated-on-release"
+        }
+      },
+      {
+        "uri": "pkg:cargo/yacht-agent@0.1.0",
+        "digest": {
+          "sha256": "placeholder-updated-on-release"
+        }
+      }
+    ]
+  },
+  "attestations": {
+    "slsa_level": 2,
+    "reproducible": true,
+    "signed": false,
+    "sbom_available": true,
+    "sbom_format": "SPDX-2.3"
+  },
+  "supply_chain": {
+    "dependencies_vendored": false,
+    "dependency_pinning": "exact",
+    "vulnerability_scanning": true,
+    "license_compliance": true
+  },
+  "contacts": {
+    "security": "security@hyperpolymath.net",
+    "provenance": "provenance@hyperpolymath.net"
+  },
+  "last_updated": "2025-11-26T00:00:00Z"
+}

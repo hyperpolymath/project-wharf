@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
+
 //! Common types for Project Wharf
 
 use serde::{Deserialize, Serialize};

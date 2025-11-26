@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
+
 //! # Wharf Core
 //!
 //! The shared logic library for Project Wharf - The Sovereign Web Hypervisor.

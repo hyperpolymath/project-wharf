@@ -1,0 +1,49 @@
+/* TEAM */
+
+Creator: Jonathan D. A. Jewell
+Role: Founder, Lead Developer
+Contact: hyperpolymath [at] proton.me
+GitLab: @hyperpolymath
+Location: United Kingdom
+Languages: English
+
+/* THANKS */
+
+Name: The Rust Community
+URL: https://www.rust-lang.org/
+
+Name: Nebula (Slack)
+URL: https://github.com/slackhq/nebula
+
+Name: Nickel Lang
+URL: https://nickel-lang.org/
+
+Name: Chainguard
+URL: https://www.chainguard.dev/
+
+Name: The Nix Community
+URL: https://nixos.org/
+
+/* SITE */
+
+Last update: 2025-11-26
+Language: English
+Doctype: AsciiDoc, Markdown
+Standards: RSR 1.0, RFC 9116, SLSA 2
+Tools: Rust, Nickel, Nix, Podman, Just
+
+/* LICENSE */
+
+Software: MIT
+Documentation: CC-BY-4.0
+SPDX: MIT
+
+/* COLOPHON */
+
+This project follows the Rhodium Standard Repository (RSR) specification.
+All source files include SPDX license headers.
+Commits are signed with GPG.
+
+For security issues, see /.well-known/security.txt
+For AI policy, see /.well-known/ai.txt
+For provenance, see /.well-known/provenance.json

@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
+#
+# Pre-push hook for Project Wharf
+# Runs before pushing to ensure tests pass
+
+set -euo pipefail
+
+echo "🚀 Running pre-push checks..."
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+FAILED=0
+
+# 1. Run tests
+echo -n "Running tests... "
+if command -v cargo &> /dev/null; then
+    if cargo test --quiet 2>/dev/null; then
+        echo -e "${GREEN}OK${NC}"
+    else
+        echo -e "${RED}FAILED${NC}"
+        FAILED=1
+    fi
+else
+    echo -e "${YELLOW}SKIP (cargo not found)${NC}"
+fi
+
+# 2. Security audit
+echo -n "Running security audit... "
+if command -v cargo-audit &> /dev/null; then
+    if cargo audit --quiet 2>/dev/null; then
+        echo -e "${GREEN}OK${NC}"
+    else
+        echo -e "${YELLOW}WARNINGS${NC}"
+        # Don't fail on audit warnings, just notify
+    fi
+else
+    echo -e "${YELLOW}SKIP (cargo-audit not found)${NC}"
+fi
+
+# 3. Check for WIP commits
+echo -n "Checking for WIP commits... "
+if git log --oneline origin/main..HEAD 2>/dev/null | grep -iE "^[a-f0-9]+ (WIP|wip|FIXME|TODO:)" > /dev/null; then
+    echo -e "${YELLOW}WARNING: WIP commits found${NC}"
+    # Don't fail, just warn
+else
+    echo -e "${GREEN}OK${NC}"
+fi
+
+# Summary
+echo ""
+if [ $FAILED -eq 1 ]; then
+    echo -e "${RED}❌ Pre-push checks failed${NC}"
+    echo "Fix the issues above and try again."
+    exit 1
+else
+    echo -e "${GREEN}✅ All pre-push checks passed${NC}"
+    exit 0
+fi
