@@ -3,15 +3,20 @@
 #
 # Podman Pod Definition for Project Wharf (Yacht Runtime)
 # ========================================================
-# This defines the complete runtime stack as a Kubernetes-style pod.
-# Use: podman kube play infra/podman/yacht.yaml
+# Two-container architecture: OpenLiteSpeed (web+PHP) + Agent (security)
+#
+# Deploy: podman kube play infra/podman/yacht.yaml
+# Remove: podman kube down infra/podman/yacht.yaml
 #
 # Architecture:
-# - nginx: Reverse proxy / static file server (non-root, port 8080)
-# - php: PHP-FPM engine for CMS (non-root, port 9000)
-# - agent: Yacht Agent for DB proxy + security enforcement
+# - web: OpenLiteSpeed + PHP 8.3 (LSAPI) - serves WordPress
+# - agent: Yacht Agent (distroless Rust) - DB proxy, integrity, eBPF loader
 #
-# The eBPF firewall is loaded separately by the agent at startup.
+# Security Model:
+# - Web root is READ-ONLY (immutable)
+# - Only /wp-content/uploads is writable
+# - Database access is proxied and filtered by Agent
+# - /wp-admin is blocked at web server level (Dark Matter)
 
 apiVersion: v1
 kind: Pod
@@ -20,27 +25,23 @@ metadata:
   labels:
     app: wharf
     component: yacht
-    version: "0.1.0"
+    version: "1.0.0"
   annotations:
     wharf.io/security-level: "immutable"
-    wharf.io/admin-access: "nebula-only"
+    wharf.io/admin-access: "offline-only"
 spec:
   # Containers share localhost networking
   hostNetwork: false
 
-  # Security context for the pod
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 65532
-    runAsGroup: 65532
-    fsGroup: 65532
+  # Restart policy
+  restartPolicy: Always
 
   containers:
     # =========================================================================
-    # 1. NGINX - The Web Server
+    # 1. WEB SERVER - OpenLiteSpeed + PHP (LSAPI)
     # =========================================================================
-    - name: nginx
-      image: localhost/yacht-nginx:latest
+    - name: web
+      image: localhost/yacht-web:latest
       ports:
         - containerPort: 8080
           hostPort: 80
@@ -50,45 +51,6 @@ spec:
           protocol: TCP
       resources:
         limits:
-          memory: "128Mi"
-          cpu: "500m"
-        requests:
-          memory: "64Mi"
-          cpu: "100m"
-      securityContext:
-        allowPrivilegeEscalation: false
-        readOnlyRootFilesystem: true
-        capabilities:
-          drop:
-            - ALL
-      volumeMounts:
-        # Web root - READ ONLY (immutable)
-        - name: web-root
-          mountPath: /var/www/html
-          readOnly: true
-        # Temp directories - RAM disk
-        - name: nginx-tmp
-          mountPath: /tmp
-      livenessProbe:
-        httpGet:
-          path: /health
-          port: 8080
-        initialDelaySeconds: 5
-        periodSeconds: 10
-      readinessProbe:
-        httpGet:
-          path: /health
-          port: 8080
-        initialDelaySeconds: 3
-        periodSeconds: 5
-
-    # =========================================================================
-    # 2. PHP-FPM - The Engine
-    # =========================================================================
-    - name: php
-      image: localhost/yacht-php:latest
-      resources:
-        limits:
           memory: "512Mi"
           cpu: "1000m"
         requests:
@@ -96,58 +58,61 @@ spec:
           cpu: "250m"
       securityContext:
         allowPrivilegeEscalation: false
-        readOnlyRootFilesystem: true
+        readOnlyRootFilesystem: false  # OLS needs to write to logs/tmp
         capabilities:
           drop:
             - ALL
       volumeMounts:
-        # Web root - READ ONLY for most paths
+        # Web root - READ ONLY (immutable files from Wharf)
         - name: web-root
           mountPath: /var/www/html
           readOnly: true
-        # Uploads directory - WRITABLE (the only exception)
+        # Uploads - WRITABLE (user-generated content)
         - name: uploads
           mountPath: /var/www/html/wp-content/uploads
           readOnly: false
-        # Cache directory - RAM disk
-        - name: php-cache
-          mountPath: /var/www/html/wp-content/cache
-        # PHP sessions - RAM disk
-        - name: php-sessions
-          mountPath: /tmp
+        # LiteSpeed cache - RAM disk
+        - name: lscache
+          mountPath: /dev/shm/lscache
+        # SSL certificates
+        - name: certs
+          mountPath: /etc/letsencrypt
+          readOnly: true
       env:
-        # Database connection (routed through Agent proxy)
+        # Database connection (routed through Agent proxy on localhost)
         - name: DB_HOST
           value: "127.0.0.1"
         - name: DB_PORT
           value: "3306"
-        # Redis for sessions/cache
+        # Redis for sessions/object cache (if available)
         - name: REDIS_HOST
           value: "127.0.0.1"
         - name: REDIS_PORT
           value: "6379"
       livenessProbe:
-        tcpSocket:
-          port: 9000
+        httpGet:
+          path: /health
+          port: 8080
         initialDelaySeconds: 10
         periodSeconds: 10
+        timeoutSeconds: 3
       readinessProbe:
-        exec:
-          command: ["php-fpm83", "-t"]
+        httpGet:
+          path: /health
+          port: 8080
         initialDelaySeconds: 5
         periodSeconds: 5
 
     # =========================================================================
-    # 3. YACHT AGENT - The Shield
+    # 2. YACHT AGENT - Security Enforcer (Distroless)
     # =========================================================================
     - name: agent
       image: localhost/yacht-agent:latest
       ports:
-        # DB Proxy (MySQL masquerade)
+        # DB Proxy (MySQL wire protocol masquerade)
         - containerPort: 3306
-          hostPort: 3306
           protocol: TCP
-        # Agent API (for Wharf mooring)
+        # Agent API (health, metrics, mooring endpoint)
         - containerPort: 9001
           protocol: TCP
       resources:
@@ -161,38 +126,50 @@ spec:
         allowPrivilegeEscalation: false
         readOnlyRootFilesystem: true
         capabilities:
-          # NET_ADMIN required for eBPF loading
+          # Required for eBPF loading (optional - graceful fallback to nftables)
           add:
             - NET_ADMIN
             - BPF
           drop:
             - ALL
       volumeMounts:
-        # Agent config
+        # Agent config (database policy, firewall rules)
         - name: agent-config
           mountPath: /etc/wharf
           readOnly: true
-        # Integrity hashes
+        # Integrity manifest storage
         - name: integrity-db
           mountPath: /var/lib/wharf
+          readOnly: false
       env:
         # Real database location (shadow port)
         - name: SHADOW_DB_HOST
-          value: "db"
+          value: "yacht-db"
         - name: SHADOW_DB_PORT
           value: "33060"
-        # Protocol detection
+        # Protocol (mysql or postgres)
         - name: DB_PROTOCOL
           value: "mysql"
-        # Network interface for eBPF
+        # Network interface for eBPF (if available)
         - name: XDP_INTERFACE
           value: "eth0"
+        # Firewall mode: ebpf, nftables, or none
+        - name: FIREWALL_MODE
+          value: "nftables"
+        # Metrics endpoint
+        - name: METRICS_ENABLED
+          value: "true"
+      # TCP probe since distroless has no curl/wget
       livenessProbe:
-        httpGet:
-          path: /health
+        tcpSocket:
           port: 9001
-        initialDelaySeconds: 10
+        initialDelaySeconds: 5
         periodSeconds: 10
+      readinessProbe:
+        tcpSocket:
+          port: 3306
+        initialDelaySeconds: 3
+        periodSeconds: 5
 
   # ===========================================================================
   # VOLUMES
@@ -201,47 +178,46 @@ spec:
     # The website files (pushed from Wharf)
     - name: web-root
       hostPath:
-        path: /opt/wharf/sites/primary/html
+        path: /opt/wharf/sites/default/html
         type: Directory
 
-    # Uploads directory (writable by PHP)
+    # Uploads directory (writable by PHP for media uploads)
     - name: uploads
       hostPath:
-        path: /opt/wharf/sites/primary/uploads
+        path: /opt/wharf/sites/default/uploads
         type: DirectoryOrCreate
 
-    # Agent configuration (from Nickel compilation)
+    # Agent configuration (compiled from Nickel/TOML)
     - name: agent-config
       hostPath:
         path: /opt/wharf/config
         type: Directory
 
-    # Integrity database (hash manifests)
+    # Integrity database (BLAKE3 manifests)
     - name: integrity-db
       hostPath:
         path: /opt/wharf/integrity
         type: DirectoryOrCreate
 
-    # RAM disk mounts (tmpfs)
-    - name: nginx-tmp
-      emptyDir:
-        medium: Memory
-        sizeLimit: "64Mi"
+    # SSL/TLS certificates
+    - name: certs
+      hostPath:
+        path: /opt/wharf/certs
+        type: DirectoryOrCreate
 
-    - name: php-cache
+    # LiteSpeed Cache (RAM disk)
+    - name: lscache
       emptyDir:
         medium: Memory
-        sizeLimit: "128Mi"
-
-    - name: php-sessions
-      emptyDir:
-        medium: Memory
-        sizeLimit: "64Mi"
+        sizeLimit: "256Mi"
 
 ---
 # ===========================================================================
 # DATABASE POD (Separate for isolation)
 # ===========================================================================
+# The database runs on a "shadow port" (33060) not the standard 3306.
+# The Agent proxies 3306 -> 33060, filtering queries via AST analysis.
+
 apiVersion: v1
 kind: Pod
 metadata:
@@ -250,11 +226,13 @@ metadata:
     app: wharf
     component: database
 spec:
+  restartPolicy: Always
+
   containers:
     - name: mariadb
       image: cgr.dev/chainguard/mariadb:latest
       ports:
-        # Shadow port (not the standard 3306)
+        # Shadow port (not exposed externally)
         - containerPort: 3306
           hostPort: 33060
           protocol: TCP
@@ -262,12 +240,18 @@ spec:
         limits:
           memory: "1Gi"
           cpu: "1000m"
+        requests:
+          memory: "256Mi"
+          cpu: "250m"
       securityContext:
         runAsNonRoot: true
         allowPrivilegeEscalation: false
       volumeMounts:
         - name: db-data
           mountPath: /var/lib/mysql
+        - name: db-config
+          mountPath: /etc/mysql/conf.d
+          readOnly: true
       env:
         - name: MYSQL_DATABASE
           value: "wordpress"
@@ -278,14 +262,49 @@ spec:
             secretKeyRef:
               name: db-credentials
               key: password
+              optional: true
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: root-password
+              optional: true
       livenessProbe:
         exec:
-          command: ["mysqladmin", "ping", "-h", "localhost"]
+          command: ["mysqladmin", "ping", "-h", "localhost", "-u", "root"]
         initialDelaySeconds: 30
         periodSeconds: 10
+      readinessProbe:
+        exec:
+          command: ["mysqladmin", "ping", "-h", "localhost", "-u", "root"]
+        initialDelaySeconds: 10
+        periodSeconds: 5
 
   volumes:
     - name: db-data
       hostPath:
         path: /opt/wharf/data/mysql
         type: DirectoryOrCreate
+    - name: db-config
+      hostPath:
+        path: /opt/wharf/config/mysql
+        type: DirectoryOrCreate
+
+---
+# ===========================================================================
+# SECRET TEMPLATE (Create before deploying)
+# ===========================================================================
+# Create with: podman secret create db-credentials credentials.env
+#
+# credentials.env:
+#   password=your-secure-wordpress-password
+#   root-password=your-secure-root-password
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+type: Opaque
+stringData:
+  password: "CHANGE_ME_wordpress_password"
+  root-password: "CHANGE_ME_root_password"

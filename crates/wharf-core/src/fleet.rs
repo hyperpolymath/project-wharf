@@ -208,6 +208,12 @@ impl Fleet {
         serde_json::from_str(&content).map_err(|e| FleetError::ParseError(e.to_string()))
     }
 
+    /// Load fleet configuration from a TOML file
+    pub fn load_toml(path: &Path) -> Result<Self, FleetError> {
+        let content = fs::read_to_string(path)?;
+        toml::from_str(&content).map_err(|e| FleetError::ParseError(e.to_string()))
+    }
+
     /// Load fleet configuration from a Nickel file (via nickel export)
     pub fn load_nickel(path: &Path) -> Result<Self, FleetError> {
         use std::process::Command;
@@ -229,25 +235,47 @@ impl Fleet {
         serde_json::from_str(&json).map_err(|e| FleetError::ParseError(e.to_string()))
     }
 
-    /// Load fleet configuration (auto-detect format)
+    /// Load fleet configuration (auto-detect format by extension)
+    /// Supports: .toml, .json, .ncl (Nickel)
     pub fn load(path: &Path) -> Result<Self, FleetError> {
         let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
         match extension {
+            "toml" => Self::load_toml(path),
             "json" => Self::load_json(path),
             "ncl" => Self::load_nickel(path),
             _ => {
-                // Try JSON first, then Nickel
-                Self::load_json(path).or_else(|_| Self::load_nickel(path))
+                // Try TOML first (most common), then JSON, then Nickel
+                Self::load_toml(path)
+                    .or_else(|_| Self::load_json(path))
+                    .or_else(|_| Self::load_nickel(path))
             }
         }
     }
 
     /// Save fleet configuration to a JSON file
     pub fn save(&self, path: &Path) -> Result<(), FleetError> {
+        let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("json");
+
+        match extension {
+            "toml" => self.save_toml(path),
+            _ => self.save_json(path),
+        }
+    }
+
+    /// Save fleet configuration to a JSON file
+    pub fn save_json(&self, path: &Path) -> Result<(), FleetError> {
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| FleetError::ParseError(e.to_string()))?;
         fs::write(path, json)?;
+        Ok(())
+    }
+
+    /// Save fleet configuration to a TOML file
+    pub fn save_toml(&self, path: &Path) -> Result<(), FleetError> {
+        let toml_str = toml::to_string_pretty(self)
+            .map_err(|e| FleetError::ParseError(e.to_string()))?;
+        fs::write(path, toml_str)?;
         Ok(())
     }
 

@@ -1,0 +1,91 @@
+# Wharf Fleet Configuration
+# ==========================
+# This file defines your fleet of Yachts (runtime servers).
+# TOML format - simple and human-readable.
+#
+# See: https://toml.io for TOML syntax reference.
+
+# Configuration version (do not change)
+version = 1
+
+# Fleet name (your choice)
+name = "my-fleet"
+
+# Default excludes for file sync (applied to all yachts)
+sync_excludes = [
+    ".git",
+    "node_modules",
+    ".env",
+    "*.log",
+    ".DS_Store",
+    "Thumbs.db",
+    "wp-content/cache",
+    "wp-content/upgrade",
+    "wp-content/debug.log",
+]
+
+# Default security policy for new yachts
+[default_policy]
+allow_writes = false        # Block all DB writes from web (recommended)
+strict_headers = true       # Enforce security headers
+enable_firewall = true      # Enable network firewall
+
+[default_policy.database]
+default_action = "audit"    # audit, allow, deny
+blocked_operations = ["DROP", "ALTER", "TRUNCATE", "CREATE", "GRANT", "REVOKE"]
+allow_writes = ["wp_comments", "wp_commentmeta"]
+deny_writes = ["wp_users", "wp_options"]
+
+# =============================================================================
+# YACHTS (Your Runtime Servers)
+# =============================================================================
+# Add one [[yachts.NAME]] section per server.
+
+[yachts.production]
+name = "production"
+ip = "10.0.1.10"
+domain = "example.com"
+ssh_port = 22
+ssh_user = "deploy"
+adapter = "wordpress"
+web_root = "/var/www/html"
+enabled = true
+tags = ["production", "primary"]
+
+[yachts.production.database]
+variant = "mariadb"
+version = "10.11"
+shadow_port = 33060
+public_port = 3306
+database = "wordpress_prod"
+user = "wp_prod"
+
+[yachts.production.policy]
+allow_writes = false
+strict_headers = true
+enable_firewall = true
+
+# Staging server (optional)
+[yachts.staging]
+name = "staging"
+ip = "10.0.1.20"
+domain = "staging.example.com"
+ssh_port = 22
+ssh_user = "deploy"
+adapter = "wordpress"
+web_root = "/var/www/html"
+enabled = true
+tags = ["staging"]
+
+[yachts.staging.database]
+variant = "mariadb"
+version = "10.11"
+shadow_port = 33060
+public_port = 3306
+database = "wordpress_staging"
+user = "wp_staging"
+
+[yachts.staging.policy]
+allow_writes = true         # Staging can have writes for testing
+strict_headers = true
+enable_firewall = false     # Less strict for development
