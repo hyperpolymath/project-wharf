@@ -624,41 +624,90 @@ async fn main() -> anyhow::Result<()> {
                     anyhow::bail!("Manifest not found: {:?}. Run 'wharf moor' first to generate one.", manifest_path);
                 }
 
-                // Determine target directory
-                let target_dir = if target == "local" {
-                    config_dir.join("site")
-                } else {
-                    // For remote yachts, we'd need to pull the manifest first
-                    warn!("Remote verification not yet implemented, verifying local site directory");
-                    config_dir.join("site")
-                };
+                // Check if target is "local" or a yacht name
+                if target == "local" {
+                    // Local verification
+                    let target_dir = config_dir.join("site");
+                    println!("Verifying local file integrity");
+                    println!("Using manifest: {:?}", manifest_path);
 
-                println!("Verifying file integrity for: {}", target);
-                println!("Using manifest: {:?}", manifest_path);
-
-                match ops::integrity::verify_against_manifest(&target_dir, &manifest_path, false) {
-                    Ok(result) => {
-                        println!();
-                        if result.is_ok() {
-                            println!("✓ Integrity verification PASSED");
-                            println!("  {} files verified", result.passed.len());
-                        } else {
-                            println!("✗ Integrity verification FAILED");
-                            if !result.mismatched.is_empty() {
-                                println!("  {} files mismatched", result.mismatched.len());
+                    match ops::integrity::verify_against_manifest(&target_dir, &manifest_path, false) {
+                        Ok(result) => {
+                            println!();
+                            if result.is_ok() {
+                                println!("✓ Integrity verification PASSED");
+                                println!("  {} files verified", result.passed.len());
+                            } else {
+                                println!("✗ Integrity verification FAILED");
+                                if !result.mismatched.is_empty() {
+                                    println!("  {} files mismatched", result.mismatched.len());
+                                }
+                                if !result.missing.is_empty() {
+                                    println!("  {} files missing", result.missing.len());
+                                }
+                                if !result.unexpected.is_empty() {
+                                    println!("  {} unexpected files", result.unexpected.len());
+                                }
+                                std::process::exit(1);
                             }
-                            if !result.missing.is_empty() {
-                                println!("  {} files missing", result.missing.len());
-                            }
-                            if !result.unexpected.is_empty() {
-                                println!("  {} unexpected files", result.unexpected.len());
-                            }
+                        }
+                        Err(e) => {
+                            eprintln!("✗ Verification failed: {}", e);
                             std::process::exit(1);
                         }
                     }
-                    Err(e) => {
-                        eprintln!("✗ Verification failed: {}", e);
-                        std::process::exit(1);
+                } else {
+                    // Remote verification - load fleet and find yacht
+                    let fleet_path = config_dir.join("fleet.toml");
+                    let fleet = ops::fleet::load_fleet(&fleet_path)?;
+
+                    let yacht = fleet.get_yacht(&target)
+                        .ok_or_else(|| anyhow::anyhow!("Yacht '{}' not found in fleet", target))?;
+
+                    println!("Verifying remote yacht: {}", target);
+                    println!("Host: {}@{}:{}", yacht.ssh_user, yacht.ip, yacht.ssh_port);
+                    println!("Remote root: {}", yacht.web_root);
+                    println!("Using manifest: {:?}", manifest_path);
+                    println!();
+
+                    match ops::integrity::verify_remote(
+                        &manifest_path,
+                        &yacht.ssh_user,
+                        &yacht.ip,
+                        yacht.ssh_port,
+                        &yacht.web_root,
+                        None, // TODO: Support identity file from config
+                    ) {
+                        Ok(result) => {
+                            println!();
+                            if result.is_ok() {
+                                println!("✓ Remote integrity verification PASSED");
+                                println!("  Yacht: {}", result.yacht);
+                                println!("  {} files verified", result.files_checked);
+                            } else {
+                                println!("✗ Remote integrity verification FAILED");
+                                if let Some(err) = &result.error {
+                                    println!("  Error: {}", err);
+                                }
+                                if !result.mismatched.is_empty() {
+                                    println!("  {} files mismatched:", result.mismatched.len());
+                                    for path in &result.mismatched {
+                                        println!("    - {}", path);
+                                    }
+                                }
+                                if !result.missing.is_empty() {
+                                    println!("  {} files missing:", result.missing.len());
+                                    for path in &result.missing {
+                                        println!("    - {}", path);
+                                    }
+                                }
+                                std::process::exit(1);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("✗ Remote verification failed: {}", e);
+                            std::process::exit(1);
+                        }
                     }
                 }
             }

@@ -83,3 +83,60 @@ pub fn hash_file(path: &Path) -> Result<String> {
     integrity::hash_file(path)
         .context(format!("Failed to hash file {:?}", path))
 }
+
+/// Verify a remote yacht's file integrity via SSH
+pub fn verify_remote(
+    manifest_path: &Path,
+    ssh_user: &str,
+    ssh_host: &str,
+    ssh_port: u16,
+    remote_root: &str,
+    identity_file: Option<&Path>,
+) -> Result<integrity::RemoteVerifyResult> {
+    info!("Verifying remote yacht {} via SSH", ssh_host);
+    info!("Remote root: {}", remote_root);
+
+    // Load the manifest
+    let manifest = integrity::load_manifest(manifest_path)
+        .context("Failed to load manifest")?;
+
+    info!("Loaded manifest with {} files", manifest.files.len());
+
+    // Run remote verification
+    let result = integrity::verify_remote_ssh(
+        &manifest,
+        ssh_user,
+        ssh_host,
+        ssh_port,
+        remote_root,
+        identity_file,
+    ).context("Remote verification failed")?;
+
+    // Report results
+    if result.passed {
+        info!("Remote verification PASSED");
+        info!("  {} files verified", result.files_checked);
+    } else {
+        info!("Remote verification FAILED");
+
+        if let Some(ref err) = result.error {
+            info!("  Error: {}", err);
+        }
+
+        if !result.mismatched.is_empty() {
+            info!("  MISMATCHED: {} files", result.mismatched.len());
+            for path in &result.mismatched {
+                info!("    {}", path);
+            }
+        }
+
+        if !result.missing.is_empty() {
+            info!("  MISSING: {} files", result.missing.len());
+            for path in &result.missing {
+                info!("    {}", path);
+            }
+        }
+    }
+
+    Ok(result)
+}

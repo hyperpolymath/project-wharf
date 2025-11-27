@@ -34,6 +34,8 @@ use tracing_subscriber::FmtSubscriber;
 use wharf_core::db_policy::{DatabasePolicy, PolicyEngine, QueryAction};
 use wharf_core::types::HeaderPolicy;
 
+mod ebpf;
+
 // =============================================================================
 // CLI ARGUMENTS
 // =============================================================================
@@ -150,26 +152,58 @@ async fn main() -> anyhow::Result<()> {
     info!("Firewall mode: {}", args.firewall_mode);
 
     // Initialize firewall based on mode
-    match args.firewall_mode.as_str() {
+    let _shield = match args.firewall_mode.as_str() {
         "ebpf" => {
             info!("Attempting to load eBPF XDP firewall on {}", args.xdp_interface);
-            // eBPF loading would go here - requires CAP_BPF capability
-            // For now, just log the attempt
-            warn!("eBPF XDP firewall not yet implemented - falling back to nftables");
-            setup_nftables_firewall().await;
+
+            // Look for the eBPF object file in standard locations
+            let ebpf_paths = [
+                std::path::PathBuf::from("/etc/wharf/wharf-shield.o"),
+                std::path::PathBuf::from("/opt/wharf/wharf-shield.o"),
+                std::path::PathBuf::from("./wharf-shield.o"),
+            ];
+
+            let ebpf_path = ebpf_paths.iter().find(|p| p.exists());
+
+            match ebpf_path {
+                Some(path) => {
+                    match ebpf::try_load_shield(path, &args.xdp_interface) {
+                        Some(shield) => {
+                            info!("eBPF XDP firewall loaded successfully on {}", args.xdp_interface);
+                            Some(shield)
+                        }
+                        None => {
+                            warn!("eBPF loading failed - falling back to nftables");
+                            setup_nftables_firewall().await;
+                            None
+                        }
+                    }
+                }
+                None => {
+                    warn!("eBPF object file not found in standard locations");
+                    warn!("Searched: /etc/wharf/wharf-shield.o, /opt/wharf/wharf-shield.o, ./wharf-shield.o");
+                    warn!("Build with: cd crates/wharf-ebpf && cargo +nightly build --target bpfel-unknown-none");
+                    warn!("Falling back to nftables");
+                    setup_nftables_firewall().await;
+                    None
+                }
+            }
         }
         "nftables" => {
             info!("Setting up nftables firewall rules");
             setup_nftables_firewall().await;
+            None
         }
         "none" => {
             warn!("Firewall disabled - NOT RECOMMENDED FOR PRODUCTION");
+            None
         }
         _ => {
             warn!("Unknown firewall mode '{}', using nftables", args.firewall_mode);
             setup_nftables_firewall().await;
+            None
         }
-    }
+    };
 
     // Initialize shared state
     let state = Arc::new(RwLock::new(AgentState::new()));

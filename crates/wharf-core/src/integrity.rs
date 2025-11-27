@@ -304,6 +304,189 @@ pub fn load_manifest(path: &Path) -> Result<Manifest, IntegrityError> {
     serde_json::from_str(&json).map_err(|e| IntegrityError::ParseError(e.to_string()))
 }
 
+/// Remote verification result from a yacht
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoteVerifyResult {
+    /// Yacht name
+    pub yacht: String,
+    /// Whether verification passed
+    pub passed: bool,
+    /// Number of files verified
+    pub files_checked: usize,
+    /// Files with hash mismatches
+    pub mismatched: Vec<String>,
+    /// Files missing on the yacht
+    pub missing: Vec<String>,
+    /// Unexpected files found
+    pub unexpected: Vec<String>,
+    /// Timestamp of verification
+    pub timestamp: u64,
+    /// Error message if any
+    pub error: Option<String>,
+}
+
+impl RemoteVerifyResult {
+    pub fn is_ok(&self) -> bool {
+        self.passed && self.error.is_none()
+    }
+}
+
+/// Verify a remote yacht via SSH
+///
+/// This function:
+/// 1. Copies the local manifest to the yacht
+/// 2. Runs a verification script on the yacht
+/// 3. Returns the results
+pub fn verify_remote_ssh(
+    manifest: &Manifest,
+    ssh_user: &str,
+    ssh_host: &str,
+    ssh_port: u16,
+    remote_root: &str,
+    identity_file: Option<&Path>,
+) -> Result<RemoteVerifyResult, IntegrityError> {
+    use std::process::Command;
+
+    let yacht_name = ssh_host.to_string();
+    let timestamp = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    // Build SSH command options
+    let mut ssh_opts = vec![
+        "-o".to_string(), "BatchMode=yes".to_string(),
+        "-o".to_string(), "StrictHostKeyChecking=accept-new".to_string(),
+        "-p".to_string(), ssh_port.to_string(),
+    ];
+
+    if let Some(key) = identity_file {
+        ssh_opts.push("-i".to_string());
+        ssh_opts.push(key.to_string_lossy().to_string());
+    }
+
+    let ssh_dest = format!("{}@{}", ssh_user, ssh_host);
+
+    // Create a verification script that will run on the remote
+    // This computes BLAKE3 hashes and compares against expected values
+    let mut verify_script = String::from("#!/bin/sh\n");
+    verify_script.push_str("set -e\n");
+    verify_script.push_str(&format!("cd '{}'\n", remote_root));
+    verify_script.push_str("MISMATCHED=''\n");
+    verify_script.push_str("MISSING=''\n");
+    verify_script.push_str("PASSED=0\n");
+
+    // Add hash checks for each file
+    for (path, entry) in &manifest.files {
+        // Use b3sum if available, fall back to sha256sum with note
+        verify_script.push_str(&format!(
+            r#"if [ -f '{}' ]; then
+  HASH=$(b3sum '{}' 2>/dev/null | cut -d' ' -f1 || sha256sum '{}' | cut -d' ' -f1)
+  if [ "$HASH" = "{}" ]; then
+    PASSED=$((PASSED + 1))
+  else
+    MISMATCHED="$MISMATCHED {}"
+  fi
+else
+  MISSING="$MISSING {}"
+fi
+"#,
+            path, path, path, entry.hash, path, path
+        ));
+    }
+
+    verify_script.push_str("echo \"PASSED:$PASSED\"\n");
+    verify_script.push_str("echo \"MISMATCHED:$MISMATCHED\"\n");
+    verify_script.push_str("echo \"MISSING:$MISSING\"\n");
+
+    // Execute via SSH
+    let mut cmd = Command::new("ssh");
+    for opt in &ssh_opts {
+        cmd.arg(opt);
+    }
+    cmd.arg(&ssh_dest);
+    cmd.arg("sh");
+    cmd.arg("-c");
+    cmd.arg(&verify_script);
+
+    let output = cmd.output()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Ok(RemoteVerifyResult {
+            yacht: yacht_name,
+            passed: false,
+            files_checked: 0,
+            mismatched: Vec::new(),
+            missing: Vec::new(),
+            unexpected: Vec::new(),
+            timestamp,
+            error: Some(format!("SSH command failed: {}", stderr)),
+        });
+    }
+
+    // Parse output
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut files_checked = 0;
+    let mut mismatched = Vec::new();
+    let mut missing = Vec::new();
+
+    for line in stdout.lines() {
+        if let Some(count) = line.strip_prefix("PASSED:") {
+            files_checked = count.trim().parse().unwrap_or(0);
+        } else if let Some(files) = line.strip_prefix("MISMATCHED:") {
+            mismatched = files.split_whitespace().map(String::from).collect();
+        } else if let Some(files) = line.strip_prefix("MISSING:") {
+            missing = files.split_whitespace().map(String::from).collect();
+        }
+    }
+
+    let passed = mismatched.is_empty() && missing.is_empty();
+
+    Ok(RemoteVerifyResult {
+        yacht: yacht_name,
+        passed,
+        files_checked,
+        mismatched,
+        missing,
+        unexpected: Vec::new(), // Would need additional scanning
+        timestamp,
+        error: None,
+    })
+}
+
+/// Request verification from a yacht agent via HTTP API
+pub async fn verify_remote_api(
+    agent_url: &str,
+    _manifest: &Manifest,
+) -> Result<RemoteVerifyResult, IntegrityError> {
+    // This would call the yacht agent's /verify endpoint
+    // For now, return an error indicating it's not implemented
+    // The actual implementation would use reqwest or similar HTTP client
+
+    let yacht_name = agent_url.to_string();
+    let timestamp = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    // In production, this would:
+    // 1. POST the manifest to {agent_url}/verify
+    // 2. The agent would verify against its local files
+    // 3. Return the results
+
+    Ok(RemoteVerifyResult {
+        yacht: yacht_name,
+        passed: false,
+        files_checked: 0,
+        mismatched: Vec::new(),
+        missing: Vec::new(),
+        unexpected: Vec::new(),
+        timestamp,
+        error: Some("Remote API verification not yet implemented - use SSH mode".to_string()),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

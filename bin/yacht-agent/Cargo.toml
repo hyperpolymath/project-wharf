@@ -40,3 +40,6 @@ tracing-subscriber = { workspace = true }
 
 # Errors
 anyhow = { workspace = true }
+
+# eBPF Userspace Loader (optional - only used in ebpf mode)
+aya = { workspace = true }
