@@ -1,0 +1,36 @@
+= wharf - Citation Guide
+:toc:
+
+== BibTeX
+
+[source,bibtex]
+----
+@software{wharf_2025,
+  author = {Polymath, Hyper},
+  title = {wharf},
+  year = {2025},
+  url = {https://github.com/hyperpolymath/wharf},
+  license = {AGPL-3.0-or-later}
+}
+----
+
+== Harvard Style
+
+Polymath, H. (2025) _wharf_ [Computer software]. Available at: https://github.com/hyperpolymath/wharf
+
+== OSCOLA
+
+Hyper Polymath, 'wharf' (2025) <https://github.com/hyperpolymath/wharf>
+
+== MLA
+
+Polymath, Hyper. "wharf." 2025, github.com/hyperpolymath/wharf.
+
+== APA 7
+
+Polymath, H. (2025). _wharf_ [Computer software]. GitHub. https://github.com/hyperpolymath/wharf
+
+== See Also
+
+* link:../CITATION.cff[CITATION.cff]
+* link:../codemeta.json[codemeta.json]
