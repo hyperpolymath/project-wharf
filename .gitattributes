@@ -1,69 +1,54 @@
-# SPDX-License-Identifier: MIT
-# SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
-#
-# Git Attributes Configuration
-# Ensures consistent behavior across platforms
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# RSR-compliant .gitattributes
 
-# Auto-detect text files and normalize line endings
-* text=auto
+* text=auto eol=lf
 
-# Source code - LF line endings
-*.rs text eol=lf
-*.toml text eol=lf
-*.ncl text eol=lf
-*.nix text eol=lf
-*.sh text eol=lf
-*.php text eol=lf
-*.py text eol=lf
+# Source
+*.rs    text eol=lf diff=rust
+*.ex    text eol=lf diff=elixir
+*.exs   text eol=lf diff=elixir
+*.jl    text eol=lf
+*.res   text eol=lf
+*.resi  text eol=lf
+*.ada   text eol=lf diff=ada
+*.adb   text eol=lf diff=ada
+*.ads   text eol=lf diff=ada
+*.hs    text eol=lf
+*.chpl  text eol=lf
+*.scm   text eol=lf
+*.ncl   text eol=lf
+*.nix   text eol=lf
 
-# Documentation - LF line endings
-*.md text eol=lf
-*.adoc text eol=lf
-*.txt text eol=lf
-*.yml text eol=lf
-*.yaml text eol=lf
-*.json text eol=lf
+# Docs
+*.md    text eol=lf diff=markdown
+*.adoc  text eol=lf
+*.txt   text eol=lf
 
-# Configuration
-*.conf text eol=lf
-*.ini text eol=lf
-*.cfg text eol=lf
-.gitignore text eol=lf
+# Data
+*.json  text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.toml  text eol=lf
+
+# Config
+.gitignore     text eol=lf
 .gitattributes text eol=lf
-Justfile text eol=lf
-Containerfile text eol=lf
-Dockerfile text eol=lf
+justfile       text eol=lf
+Makefile       text eol=lf
+Containerfile  text eol=lf
 
-# Templates (DNS zone files)
-*.tpl text eol=lf
-*.db text eol=lf
-*.zone text eol=lf
+# Scripts
+*.sh   text eol=lf
 
-# Binary files - no conversion
-*.png binary
-*.jpg binary
-*.jpeg binary
-*.gif binary
-*.ico binary
-*.pdf binary
-*.wasm binary
+# Binary
+*.png   binary
+*.jpg   binary
+*.gif   binary
+*.pdf   binary
+*.woff2 binary
+*.zip   binary
+*.gz    binary
 
-# Archives - no conversion
-*.tar binary
-*.tar.gz binary
-*.zip binary
-
-# Diff configuration
-*.rs diff=rust
-*.md diff=markdown
-*.adoc diff=asciidoc
-
-# Merge strategies
-Cargo.lock merge=binary
-flake.lock merge=binary
-
-# Export ignore (not included in archives)
-.git* export-ignore
-.gitlab-ci.yml export-ignore
-.pre-commit-config.yaml export-ignore
-tests/ export-ignore
+# Lock files
+Cargo.lock  text eol=lf -diff
+flake.lock  text eol=lf -diff
