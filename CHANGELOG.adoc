@@ -1,0 +1,69 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+= Changelog
+
+All notable changes to Project Wharf will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+== [Unreleased]
+
+=== Added
+- Initial project structure
+- Rust workspace with wharf-core, wharf-cli, and yacht-agent crates
+- DNS zone templates (simple, shared, standard, maximalist)
+- Nickel configuration schemas for security policies
+- Database policy engine with AST-based SQL filtering
+- CMS adapters for WordPress, Drupal, Joomla, Moodle
+- Shell scripts for zone rendering, auditing, and deployment
+- Comprehensive Justfile with 50+ recipes
+- RSR (Rhodium Standard Repository) compliance documentation
+
+=== Security
+- Implemented AST-based SQL query analysis (not regex)
+- Added HTTP header airlock configuration
+- Defined filesystem immutability policies
+- Configured Nebula mesh network policies
+- Added FIDO2/WebAuthn authentication framework
+
+== [0.1.0] - 2025-11-26
+
+=== Added
+- Initial release of Project Wharf
+- Core architecture: Wharf (offline controller) + Yacht (runtime enforcer)
+- Database "Virtual Sharding" concept
+- Zero Trust networking via Nebula
+- Support for WordPress, Drupal, Joomla, Moodle
+
+=== Documentation
+- README.adoc with full architecture overview
+- SECURITY.md with vulnerability reporting process
+- CONTRIBUTING.adoc with TPCF contribution framework
+- GOVERNANCE.adoc with decision-making process
+
+---
+
+== Version History Summary
+
+| Version | Date | Highlights |
+|---------|------|------------|
+| 0.1.0 | 2025-11-26 | Initial release |
+
+== Upgrade Guide
+
+=== Upgrading to 0.1.0
+
+This is the initial release. No upgrade path required.
+
+== Deprecation Notices
+
+*None at this time.*
+
+== Security Advisories
+
+*None at this time.*
+
+---
+
+[Unreleased]: https://gitlab.com/hyperpolymath/wharf/-/compare/v0.1.0...HEAD
+[0.1.0]: https://gitlab.com/hyperpolymath/wharf/-/releases/v0.1.0
