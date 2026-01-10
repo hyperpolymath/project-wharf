@@ -1,6 +1,6 @@
 = Project Wharf
+image:https://img.shields.io/badge/license-PMPL--1.0-blue.svg[License,link="https://github.com/hyperpolymath/palimpsest-license"]
 
-image:https://img.shields.io/badge/license-Palimpsest--MPL--1.0-purple.svg[Palimpsest-MPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"] image:https://img.shields.io/badge/philosophy-Palimpsest-purple.svg[Palimpsest,link="https://github.com/hyperpolymath/palimpsest-licence"]
 :toc: left
 :toclevels: 3
 :icons: font
@@ -256,7 +256,7 @@ Contributions are welcome! Please ensure:
 
 == License
 
-Palimpsest-MPL-1.0 License. See LICENSE file for details.
+Palimpsest-MPL License v1.0 (PMPL-1.0). See LICENSE file for details.
 
 == Credits
 
