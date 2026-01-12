@@ -31,6 +31,7 @@ use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info, warn, Level};
 use tracing_subscriber::FmtSubscriber;
 
+use wharf_core::config::{ConfigLoader, YachtAgentConfig};
 use wharf_core::db_policy::{DatabasePolicy, PolicyEngine, QueryAction};
 use wharf_core::types::HeaderPolicy;
 
@@ -175,8 +176,48 @@ impl AgentState {
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    // Set up logging based on verbosity
-    let log_level = match args.verbose {
+    // Load configuration file (CLI args override config file values)
+    let config_loader = ConfigLoader::new();
+    let config = config_loader.load_yacht_agent_config().unwrap_or_else(|e| {
+        eprintln!("Warning: Failed to load config file: {}. Using defaults.", e);
+        YachtAgentConfig::default()
+    });
+
+    // Merge config with CLI args (CLI takes precedence)
+    let protocol = if args.protocol != "mysql" {
+        args.protocol.clone()
+    } else {
+        config.db_proxy.protocol.clone()
+    };
+    let listen_port = args.listen_port;
+    let shadow_host = if args.shadow_host != "127.0.0.1" {
+        args.shadow_host.clone()
+    } else {
+        config.db_proxy.shadow_host.clone()
+    };
+    let shadow_port = if args.shadow_port != 33060 {
+        args.shadow_port
+    } else {
+        config.db_proxy.shadow_port
+    };
+    let firewall_mode = if args.firewall_mode != "nftables" {
+        args.firewall_mode.clone()
+    } else {
+        config.firewall.mode.clone()
+    };
+    let xdp_interface = if args.xdp_interface != "eth0" {
+        args.xdp_interface.clone()
+    } else {
+        config.firewall.xdp_interface.clone()
+    };
+
+    // Set up logging based on verbosity (CLI overrides config)
+    let verbosity = if args.verbose > 0 {
+        args.verbose
+    } else {
+        config.logging.verbosity
+    };
+    let log_level = match verbosity {
         0 => Level::INFO,
         1 => Level::DEBUG,
         _ => Level::TRACE,
@@ -192,15 +233,15 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Yacht Agent starting...");
     info!("Version: {}", wharf_core::VERSION);
-    info!("Protocol: {}", args.protocol);
-    info!("Masquerade port: {}", args.listen_port);
-    info!("Shadow DB: {}:{}", args.shadow_host, args.shadow_port);
-    info!("Firewall mode: {}", args.firewall_mode);
+    info!("Protocol: {}", protocol);
+    info!("Masquerade port: {}", listen_port);
+    info!("Shadow DB: {}:{}", shadow_host, shadow_port);
+    info!("Firewall mode: {}", firewall_mode);
 
     // Initialize firewall based on mode
-    let _firewall: Firewall = match args.firewall_mode.as_str() {
+    let _firewall: Firewall = match firewall_mode.as_str() {
         "ebpf" => {
-            info!("Attempting to load eBPF XDP firewall on {}", args.xdp_interface);
+            info!("Attempting to load eBPF XDP firewall on {}", xdp_interface);
 
             // Look for the eBPF object file in standard locations
             let ebpf_paths = [
@@ -213,9 +254,9 @@ async fn main() -> anyhow::Result<()> {
 
             match ebpf_path {
                 Some(path) => {
-                    match ebpf::try_load_shield(path, &args.xdp_interface) {
+                    match ebpf::try_load_shield(path, &xdp_interface) {
                         Some(shield) => {
-                            info!("eBPF XDP firewall loaded successfully on {}", args.xdp_interface);
+                            info!("eBPF XDP firewall loaded successfully on {}", xdp_interface);
                             Firewall::Ebpf(shield)
                         }
                         None => {

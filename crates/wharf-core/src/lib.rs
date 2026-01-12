@@ -13,7 +13,9 @@
 //! - Fleet configuration management
 //! - Configuration types for Nickel schema validation
 //! - Common error types
+//! - Configuration loading (TOML/Nickel)
 
+pub mod config;
 pub mod crypto;
 pub mod db_policy;
 pub mod errors;

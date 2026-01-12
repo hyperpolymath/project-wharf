@@ -9,7 +9,7 @@
       ((version . "1.0.0")
        (schema-version . "1")
        (created . "2025-01-10T13:50:29+00:00")
-       (updated . "2025-01-12T06:00:00+00:00")
+       (updated . "2025-01-12T07:00:00+00:00")
        (project . "project-wharf")
        (repo . "https://github.com/hyperpolymath/project-wharf")))
 
@@ -20,16 +20,16 @@
 
     (current-position
       ((phase . "Alpha Development")
-       (overall-completion . 55)
+       (overall-completion . 60)
        (components
          ((wharf-core
             ((status . "functional")
-             (completion . 60)
-             (notes . "PolicyEngine, IntegrityChecker, SyncManager implemented")))
+             (completion . 70)
+             (notes . "PolicyEngine, IntegrityChecker, SyncManager, ConfigLoader implemented")))
           (yacht-agent
             ((status . "in-progress")
-             (completion . 60)
-             (notes . "DB proxy, API, eBPF loader, nftables fallback complete")))
+             (completion . 65)
+             (notes . "DB proxy, API, eBPF loader, nftables fallback, config loading complete")))
           (wharf-cli
             ((status . "in-progress")
              (completion . 35)
@@ -43,15 +43,16 @@
           "SQL AST parsing for zone classification"
           "BLAKE3 file integrity manifests"
           "eBPF XDP firewall loader (userspace)"
-          "rsync-based file synchronization"))))
+          "nftables fallback firewall"
+          "rsync-based file synchronization"
+          "Configuration file loading (TOML)"))))
 
     (route-to-mvp
       ((milestones
         ((core-hardening
            ((target-completion . 70)
-            (items . ("Complete nftables fallback"
-                      "Wire integrity ops in CLI"
-                      "Add configuration file support"))
+            (items . ("Wire integrity ops in CLI"
+                      "Add config loading to wharf-cli"))
             (status . "in-progress")))
          (nebula-integration
            ((target-completion . 85)
@@ -69,20 +70,28 @@
     (blockers-and-issues
       ((critical . ())
        (high . ())
-       (medium . ("CLI integrity commands not wired"
-                  "No configuration file support"))
+       (medium . ("CLI integrity commands not wired"))
        (low . ("Some unused function warnings in wharf-cli"))))
 
     (critical-next-actions
       ((immediate . ("Wire integrity commands in CLI"
-                     "Add configuration file support"))
+                     "Start Nebula/Mooring integration"))
        (this-week . ("Test nftables on production system"
                      "Test eBPF compilation with bpf-linker"))
-       (this-month . ("Begin Nebula mesh integration"
+       (this-month . ("Implement Mooring protocol"
                       "Performance optimization"))))
 
     (session-history
-      (((timestamp . "2025-01-12T06:00:00Z")
+      (((timestamp . "2025-01-12T07:00:00Z")
+        (session-id . "config-support")
+        (accomplishments
+          ("Created wharf-core config module with TOML support"
+           "Added ConfigLoader for hierarchical config discovery"
+           "Defined YachtAgentConfig and WharfCliConfig structs"
+           "Integrated config loading into yacht-agent main"
+           "Config merges with CLI args (CLI takes precedence)"
+           "Created example config files in examples/")))
+       ((timestamp . "2025-01-12T06:00:00Z")
         (session-id . "firewall-blockers")
         (accomplishments
           ("Implemented NftablesManager with full runtime API"

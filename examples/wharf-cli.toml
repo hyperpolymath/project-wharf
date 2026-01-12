@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: PMPL-1.0
+# SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
+#
+# Example wharf-cli configuration file
+# Copy to one of these locations:
+#   - .wharf/config.toml (project-local)
+#   - ~/.config/wharf/wharf-cli.toml (user config)
+#   - /etc/wharf/wharf-cli.toml (system config)
+
+[logging]
+# Verbosity level: 0=info, 1=debug, 2+=trace
+verbosity = 0
+# Log format: "human" or "json"
+format = "human"
+
+[paths]
+# Configuration directory
+config_dir = "."
+# Build output directory
+output_dir = "dist"
+# Site source directory (for static site generation)
+site_source = "./site"
+# Fleet configuration file
+fleet_config = "fleet.toml"
+
+[build]
+# Target yacht to build (None = all)
+# target = "production-yacht"
+# Build container images
+containers = false
+# Build eBPF program
+ebpf = false
+# Output directory
+output = "dist"
+
+[mooring]
+# Force sync even if checksums match
+force = false
+# Emergency mode (skip verification - use with caution!)
+emergency = false
+# Dry run mode (preview changes without applying)
+dry_run = false
+# Default layers to sync
+layers = ["config", "files"]
+
+[state]
+# Number of snapshots to keep for rollback
+snapshots_to_keep = 10
+# Snapshot directory
+snapshot_dir = ".wharf/snapshots"

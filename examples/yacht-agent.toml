@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: PMPL-1.0
+# SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
+#
+# Example yacht-agent configuration file
+# Copy to one of these locations:
+#   - .wharf/yacht-agent.toml (project-local)
+#   - ~/.config/wharf/yacht-agent.toml (user config)
+#   - /etc/wharf/yacht-agent.toml (system config)
+
+[logging]
+# Verbosity level: 0=info, 1=debug, 2+=trace
+verbosity = 0
+# Log format: "human" or "json"
+format = "json"
+
+[db_proxy]
+# Database protocol: mysql, mariadb, postgres, redis
+protocol = "mysql"
+# Port to listen on (masquerade port - applications connect here)
+listen_port = 3306
+# Real database host (the shadow)
+shadow_host = "127.0.0.1"
+# Real database port (actual database listens here)
+shadow_port = 33060
+
+[api]
+# Internal API server port for health checks and metrics
+port = 9001
+# Enable Prometheus metrics endpoint
+metrics_enabled = true
+# Metrics endpoint path
+metrics_path = "/metrics"
+
+[firewall]
+# Firewall mode: "ebpf", "nftables", or "none"
+mode = "nftables"
+# Network interface for XDP attachment (eBPF mode only)
+xdp_interface = "eth0"
+# Allowed TCP ports (in addition to listen_port)
+tcp_ports = [80, 443, 9001]
+# Allowed UDP ports (Nebula mesh)
+udp_ports = [4242]
+# Path to eBPF object file (optional, auto-detected if not set)
+# ebpf_object_path = "/etc/wharf/wharf-shield.o"

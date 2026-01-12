@@ -27,5 +27,8 @@ anyhow = { workspace = true }
 # Logging
 tracing = { workspace = true }
 
+# Platform-independent directories
+dirs = "5.0"
+
 [dev-dependencies]
 tempfile = "3.10"
