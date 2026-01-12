@@ -1,5 +1,10 @@
+image:[License,link="https://github.com/hyperpolymath/palimpsest-license"]
+
+// SPDX-License-Identifier: PMPL-1.0
+// SPDX-FileCopyrightText: 2025 hyperpolymath
+
 = Project Wharf
-image:https://img.shields.io/badge/license-PMPL--1.0-blue.svg[License,link="https://github.com/hyperpolymath/palimpsest-license"]
+image:[License,link="https://github.com/hyperpolymath/palimpsest-license"]
 
 :toc: left
 :toclevels: 3
