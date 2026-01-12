@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: PMPL-1.0
 # SPDX-FileCopyrightText: 2025 hyperpolymath
 
 # Multi-stage Dockerfile for Project Wharf

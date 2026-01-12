@@ -166,7 +166,7 @@ All source files must include SPDX headers:
 
 [source,rust]
 ----
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: PMPL-1.0
 // SPDX-FileCopyrightText: 2025 Your Name <email>
 ----
 
@@ -241,6 +241,6 @@ Security-related contributions require extra care:
 == License
 
 By contributing, you agree that your contributions will be licensed under the
-MIT License. See LICENSE.txt for details.
+Palimpsest-MPL License v1.0 (PMPL-1.0). See LICENSE.txt for details.
 
 All contributions must include SPDX headers attributing your work.

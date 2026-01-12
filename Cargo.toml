@@ -13,7 +13,7 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 authors = ["Jonathan D. A. Jewell <hyperpolymath>"]
-license = "MIT"
+license = "PMPL-1.0"
 repository = "https://gitlab.com/hyperpolymath/wharf"
 description = "The Sovereign Web Hypervisor - Immutable CMS Infrastructure"
 
