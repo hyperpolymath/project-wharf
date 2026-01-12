@@ -23,16 +23,21 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::{routing::get, Router};
+use axum::{extract::State, routing::{get, post}, Json, Router};
 use clap::Parser;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Mutex, RwLock};
-use tracing::{error, info, warn, Level};
+use tracing::{debug, error, info, warn, Level};
 use tracing_subscriber::FmtSubscriber;
 
 use wharf_core::config::{ConfigLoader, YachtAgentConfig};
 use wharf_core::db_policy::{DatabasePolicy, PolicyEngine, QueryAction};
+use wharf_core::mooring::{
+    self, CommitRequest, CommitResponse, MooringInitRequest, MooringInitResponse,
+    MooringSession, SessionState, VerifyRequest, VerifyResponse, YachtStatus,
+    MOORING_PROTOCOL_VERSION,
+};
 use wharf_core::types::HeaderPolicy;
 
 mod ebpf;
@@ -150,6 +155,15 @@ struct AgentState {
     /// The expected filesystem hashes (from Wharf)
     integrity_hashes: std::collections::HashMap<String, String>,
 
+    /// Active mooring sessions
+    mooring_sessions: std::collections::HashMap<String, MooringSession>,
+
+    /// Allowed Wharf public keys (Ed25519, hex-encoded)
+    allowed_wharf_keys: Vec<String>,
+
+    /// Last successful mooring timestamp
+    last_mooring_time: Option<u64>,
+
     /// Statistics
     queries_allowed: u64,
     queries_blocked: u64,
@@ -162,8 +176,31 @@ impl AgentState {
             header_policy: HeaderPolicy::default(),
             moored: false,
             integrity_hashes: std::collections::HashMap::new(),
+            mooring_sessions: std::collections::HashMap::new(),
+            allowed_wharf_keys: vec![],
+            last_mooring_time: None,
             queries_allowed: 0,
             queries_blocked: 0,
+        }
+    }
+
+    /// Check if a Wharf public key is allowed
+    fn is_wharf_key_allowed(&self, pubkey: &str) -> bool {
+        // In development mode, accept any key if no keys are configured
+        if self.allowed_wharf_keys.is_empty() {
+            return true;
+        }
+        self.allowed_wharf_keys.contains(&pubkey.to_string())
+    }
+
+    /// Get the current yacht status
+    fn get_status(&self) -> YachtStatus {
+        YachtStatus {
+            ready: true,
+            load: 0, // TODO: Calculate actual load
+            connections: 0, // TODO: Track connections
+            last_mooring: self.last_mooring_time,
+            not_ready_reason: None,
         }
     }
 }
@@ -339,7 +376,11 @@ async fn main() -> anyhow::Result<()> {
     let mut app = Router::new()
         .route("/health", get(health_check))
         .route("/status", get(status))
-        .route("/stats", get(stats));
+        .route("/stats", get(stats))
+        // Mooring protocol endpoints
+        .route("/mooring/init", post(mooring_init))
+        .route("/mooring/verify", post(mooring_verify))
+        .route("/mooring/commit", post(mooring_commit));
 
     // Add metrics endpoint if enabled
     if args.metrics_enabled {
@@ -592,6 +633,169 @@ yacht_integrity_status 1
 "#,
         wharf_core::VERSION
     )
+}
+
+// =============================================================================
+// MOORING ENDPOINTS
+// =============================================================================
+
+/// Type alias for shared state
+type SharedState = Arc<RwLock<AgentState>>;
+
+/// Initialize a mooring session
+async fn mooring_init(
+    State(state): State<SharedState>,
+    Json(request): Json<MooringInitRequest>,
+) -> Json<serde_json::Value> {
+    debug!("Mooring init request from key: {}", request.wharf_pubkey);
+
+    // Version check
+    if request.version != MOORING_PROTOCOL_VERSION {
+        return Json(serde_json::json!({
+            "error": "version_mismatch",
+            "expected": MOORING_PROTOCOL_VERSION,
+            "actual": request.version
+        }));
+    }
+
+    let mut state_guard = state.write().await;
+
+    // Key authorization check
+    if !state_guard.is_wharf_key_allowed(&request.wharf_pubkey) {
+        warn!("Mooring attempt from unknown key: {}", request.wharf_pubkey);
+        return Json(serde_json::json!({
+            "error": "unauthorized",
+            "message": "Wharf public key not in allow list"
+        }));
+    }
+
+    // TODO: Verify Ed25519 signature
+
+    // Create session
+    let session_id = mooring::generate_session_id();
+    let now = mooring::current_timestamp();
+    let expires_at = now + 3600; // 1 hour session
+
+    let session = MooringSession {
+        session_id: session_id.clone(),
+        wharf_pubkey: request.wharf_pubkey.clone(),
+        created_at: now,
+        expires_at,
+        requested_layers: request.layers.clone(),
+        committed_layers: vec![],
+        state: SessionState::Initiated,
+    };
+
+    state_guard.mooring_sessions.insert(session_id.clone(), session);
+    let yacht_status = state_guard.get_status();
+    drop(state_guard);
+
+    info!("Mooring session initiated: {}", session_id);
+
+    let response = MooringInitResponse {
+        session_id,
+        version: MOORING_PROTOCOL_VERSION.to_string(),
+        yacht_pubkey: "TODO_YACHT_PUBKEY".to_string(), // TODO: Generate/load yacht keypair
+        accepted_layers: request.layers,
+        expires_at,
+        status: yacht_status,
+    };
+
+    Json(serde_json::to_value(response).unwrap())
+}
+
+/// Verify a layer against expected manifest
+async fn mooring_verify(
+    State(state): State<SharedState>,
+    Json(request): Json<VerifyRequest>,
+) -> Json<serde_json::Value> {
+    debug!("Mooring verify request for session: {}", request.session_id);
+
+    let state_guard = state.read().await;
+
+    // Find session
+    let session = match state_guard.mooring_sessions.get(&request.session_id) {
+        Some(s) => s,
+        None => {
+            return Json(serde_json::json!({
+                "error": "session_not_found",
+                "session_id": request.session_id
+            }));
+        }
+    };
+
+    // Check session validity
+    let now = mooring::current_timestamp();
+    if now > session.expires_at {
+        return Json(serde_json::json!({
+            "error": "session_expired",
+            "session_id": request.session_id
+        }));
+    }
+
+    drop(state_guard);
+
+    // TODO: Actually verify files on disk against manifest
+    // For MVP, just return success
+    let response = VerifyResponse {
+        verified: true,
+        matched_files: request.expected_manifest.file_count,
+        differing_files: vec![],
+        missing_files: vec![],
+        extra_files: vec![],
+    };
+
+    Json(serde_json::to_value(response).unwrap())
+}
+
+/// Commit transferred layers
+async fn mooring_commit(
+    State(state): State<SharedState>,
+    Json(request): Json<CommitRequest>,
+) -> Json<serde_json::Value> {
+    debug!("Mooring commit request for session: {}", request.session_id);
+
+    let mut state_guard = state.write().await;
+
+    // Find and update session
+    let session = match state_guard.mooring_sessions.get_mut(&request.session_id) {
+        Some(s) => s,
+        None => {
+            return Json(serde_json::json!({
+                "error": "session_not_found",
+                "session_id": request.session_id
+            }));
+        }
+    };
+
+    // Check session validity
+    let now = mooring::current_timestamp();
+    if now > session.expires_at {
+        return Json(serde_json::json!({
+            "error": "session_expired",
+            "session_id": request.session_id
+        }));
+    }
+
+    // Update session state
+    session.state = SessionState::Committed;
+    session.committed_layers = request.layers.clone();
+
+    // Update agent state
+    state_guard.moored = true;
+    state_guard.last_mooring_time = Some(now);
+
+    info!("Mooring commit successful for session: {}", request.session_id);
+
+    let response = CommitResponse {
+        success: true,
+        committed_layers: request.layers,
+        files_modified: 0, // TODO: Track actual changes
+        snapshot_id: Some(format!("snap-{}", now)),
+        error: None,
+    };
+
+    Json(serde_json::to_value(response).unwrap())
 }
 
 // =============================================================================

@@ -14,6 +14,7 @@
 //! - Configuration types for Nickel schema validation
 //! - Common error types
 //! - Configuration loading (TOML/Nickel)
+//! - Mooring protocol for yacht synchronization
 
 pub mod config;
 pub mod crypto;
@@ -21,6 +22,7 @@ pub mod db_policy;
 pub mod errors;
 pub mod fleet;
 pub mod integrity;
+pub mod mooring;
 pub mod sync;
 pub mod types;
 

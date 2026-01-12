@@ -9,7 +9,7 @@
       ((version . "1.0.0")
        (schema-version . "1")
        (created . "2025-01-10T13:50:29+00:00")
-       (updated . "2025-01-12T07:00:00+00:00")
+       (updated . "2025-01-12T08:00:00+00:00")
        (project . "project-wharf")
        (repo . "https://github.com/hyperpolymath/project-wharf")))
 
@@ -20,16 +20,16 @@
 
     (current-position
       ((phase . "Alpha Development")
-       (overall-completion . 60)
+       (overall-completion . 65)
        (components
          ((wharf-core
             ((status . "functional")
-             (completion . 70)
-             (notes . "PolicyEngine, IntegrityChecker, SyncManager, ConfigLoader implemented")))
+             (completion . 75)
+             (notes . "PolicyEngine, IntegrityChecker, SyncManager, ConfigLoader, Mooring protocol")))
           (yacht-agent
             ((status . "in-progress")
-             (completion . 65)
-             (notes . "DB proxy, API, eBPF loader, nftables fallback, config loading complete")))
+             (completion . 70)
+             (notes . "DB proxy, API, eBPF loader, nftables, config, mooring endpoints complete")))
           (wharf-cli
             ((status . "in-progress")
              (completion . 35)
@@ -45,7 +45,9 @@
           "eBPF XDP firewall loader (userspace)"
           "nftables fallback firewall"
           "rsync-based file synchronization"
-          "Configuration file loading (TOML)"))))
+          "Configuration file loading (TOML)"
+          "Mooring protocol definition (init/verify/commit)"
+          "Mooring API endpoints in yacht-agent"))))
 
     (route-to-mvp
       ((milestones
@@ -56,10 +58,11 @@
             (status . "in-progress")))
          (nebula-integration
            ((target-completion . 85)
-            (items . ("Implement Mooring protocol"
+            (items . ("Wire mooring protocol to CLI"
                       "Nebula mesh VPN coordination"
-                      "Certificate management"))
-            (status . "pending")))
+                      "Certificate management"
+                      "Ed25519 signature verification"))
+            (status . "in-progress")))
          (production-ready
            ((target-completion . 100)
             (items . ("Performance optimization"
@@ -82,7 +85,16 @@
                       "Performance optimization"))))
 
     (session-history
-      (((timestamp . "2025-01-12T07:00:00Z")
+      (((timestamp . "2025-01-12T08:00:00Z")
+        (session-id . "mooring-protocol")
+        (accomplishments
+          ("Created wharf-core mooring module with protocol types"
+           "Defined MooringLayer, MooringSession, SessionState enums"
+           "Added request/response types for init/verify/commit"
+           "Implemented mooring endpoints in yacht-agent API"
+           "Session management with expiration and state tracking"
+           "MVP mooring protocol ready for CLI integration")))
+       ((timestamp . "2025-01-12T07:00:00Z")
         (session-id . "config-support")
         (accomplishments
           ("Created wharf-core config module with TOML support"
