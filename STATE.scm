@@ -9,7 +9,7 @@
       ((version . "1.0.0")
        (schema-version . "1")
        (created . "2025-01-10T13:50:29+00:00")
-       (updated . "2025-01-12T08:00:00+00:00")
+       (updated . "2025-01-12T09:00:00+00:00")
        (project . "project-wharf")
        (repo . "https://github.com/hyperpolymath/project-wharf")))
 
@@ -20,7 +20,7 @@
 
     (current-position
       ((phase . "Alpha Development")
-       (overall-completion . 65)
+       (overall-completion . 70)
        (components
          ((wharf-core
             ((status . "functional")
@@ -31,9 +31,9 @@
              (completion . 70)
              (notes . "DB proxy, API, eBPF loader, nftables, config, mooring endpoints complete")))
           (wharf-cli
-            ((status . "in-progress")
-             (completion . 35)
-             (notes . "Basic commands implemented")))
+            ((status . "functional")
+             (completion . 60)
+             (notes . "Fleet, moor, integrity commands wired up")))
           (wharf-ebpf
             ((status . "functional")
              (completion . 80)
@@ -47,15 +47,15 @@
           "rsync-based file synchronization"
           "Configuration file loading (TOML)"
           "Mooring protocol definition (init/verify/commit)"
-          "Mooring API endpoints in yacht-agent"))))
+          "Mooring API endpoints in yacht-agent"
+          "CLI integrity commands (generate/verify/hash/diff)"))))
 
     (route-to-mvp
       ((milestones
         ((core-hardening
            ((target-completion . 70)
-            (items . ("Wire integrity ops in CLI"
-                      "Add config loading to wharf-cli"))
-            (status . "in-progress")))
+            (items . ("Add config loading to wharf-cli"))
+            (status . "nearly-complete")))
          (nebula-integration
            ((target-completion . 85)
             (items . ("Wire mooring protocol to CLI"
@@ -73,19 +73,29 @@
     (blockers-and-issues
       ((critical . ())
        (high . ())
-       (medium . ("CLI integrity commands not wired"))
+       (medium . ())
        (low . ("Some unused function warnings in wharf-cli"))))
 
     (critical-next-actions
-      ((immediate . ("Wire integrity commands in CLI"
-                     "Start Nebula/Mooring integration"))
+      ((immediate . ("Wire mooring protocol to CLI"
+                     "Add config loading to wharf-cli"))
        (this-week . ("Test nftables on production system"
-                     "Test eBPF compilation with bpf-linker"))
-       (this-month . ("Implement Mooring protocol"
+                     "Test eBPF compilation with bpf-linker"
+                     "Begin Nebula mesh VPN coordination"))
+       (this-month . ("Complete Nebula integration"
                       "Performance optimization"))))
 
     (session-history
-      (((timestamp . "2025-01-12T08:00:00Z")
+      (((timestamp . "2025-01-12T09:00:00Z")
+        (session-id . "cli-integrity-commands")
+        (accomplishments
+          ("Added IntegrityCommands enum to CLI"
+           "Implemented wharf integrity generate command"
+           "Implemented wharf integrity verify command (local + remote)"
+           "Implemented wharf integrity hash command"
+           "Implemented wharf integrity diff command"
+           "All medium-priority blockers resolved")))
+       ((timestamp . "2025-01-12T08:00:00Z")
         (session-id . "mooring-protocol")
         (accomplishments
           ("Created wharf-core mooring module with protocol types"

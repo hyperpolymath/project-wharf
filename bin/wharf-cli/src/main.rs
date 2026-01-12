@@ -157,6 +157,9 @@ enum Commands {
     /// Container management commands
     Container(ContainerArgs),
 
+    /// File integrity commands
+    Integrity(IntegrityArgs),
+
     /// Show version and system info
     Version,
 }
@@ -452,6 +455,72 @@ enum ContainerCommands {
         /// Number of lines
         #[arg(short, long, default_value_t = 100)]
         lines: usize,
+    },
+}
+
+// =============================================================================
+// INTEGRITY COMMANDS
+// =============================================================================
+
+#[derive(Args)]
+struct IntegrityArgs {
+    #[command(subcommand)]
+    command: IntegrityCommands,
+}
+
+#[derive(Subcommand)]
+enum IntegrityCommands {
+    /// Generate a BLAKE3 integrity manifest for a directory
+    Generate {
+        /// Directory to generate manifest for
+        #[arg(default_value = "site")]
+        path: String,
+
+        /// Output manifest file
+        #[arg(short, long, default_value = ".wharf-manifest.json")]
+        output: String,
+
+        /// Patterns to exclude (can be repeated)
+        #[arg(short, long)]
+        exclude: Vec<String>,
+    },
+
+    /// Verify file integrity against a manifest
+    Verify {
+        /// Target: "local" for local files, or yacht name for remote
+        #[arg(default_value = "local")]
+        target: String,
+
+        /// Path to manifest file
+        #[arg(short, long)]
+        manifest: Option<String>,
+
+        /// Directory to verify (for local verification)
+        #[arg(short, long, default_value = "site")]
+        path: String,
+
+        /// Allow unexpected files (don't fail if extra files found)
+        #[arg(long)]
+        allow_extra: bool,
+    },
+
+    /// Compute BLAKE3 hash of a single file
+    Hash {
+        /// File to hash
+        file: String,
+    },
+
+    /// Compare two manifests and show differences
+    Diff {
+        /// First manifest file
+        manifest1: String,
+
+        /// Second manifest file
+        manifest2: String,
+
+        /// Show only changed files
+        #[arg(long)]
+        changed_only: bool,
     },
 }
 
@@ -795,6 +864,248 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         },
+
+        Commands::Integrity(args) => {
+            let config_dir = PathBuf::from(&cli.config);
+
+            match args.command {
+                IntegrityCommands::Generate { path, output, exclude } => {
+                    let source_path = config_dir.join(&path);
+                    let output_path = config_dir.join(&output);
+
+                    if !source_path.exists() {
+                        anyhow::bail!("Source directory not found: {:?}", source_path);
+                    }
+
+                    println!("Generating BLAKE3 integrity manifest...");
+                    println!("  Source: {:?}", source_path);
+                    println!("  Output: {:?}", output_path);
+
+                    if !exclude.is_empty() {
+                        println!("  Excludes: {:?}", exclude);
+                    }
+
+                    match ops::integrity::generate_manifest(&source_path, &exclude, Some(&output_path)) {
+                        Ok(manifest) => {
+                            println!();
+                            println!("✓ Manifest generated successfully");
+                            println!("  {} files", manifest.files.len());
+                            println!("  {} directories", manifest.directories.len());
+                        }
+                        Err(e) => {
+                            eprintln!("✗ Failed to generate manifest: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+
+                IntegrityCommands::Verify { target, manifest, path, allow_extra } => {
+                    let manifest_path = if let Some(m) = manifest {
+                        PathBuf::from(m)
+                    } else {
+                        config_dir.join(&path).join(".wharf-manifest.json")
+                    };
+
+                    if !manifest_path.exists() {
+                        anyhow::bail!(
+                            "Manifest not found: {:?}\nGenerate one with: wharf integrity generate",
+                            manifest_path
+                        );
+                    }
+
+                    if target == "local" {
+                        let target_dir = config_dir.join(&path);
+                        println!("Verifying local file integrity...");
+                        println!("  Directory: {:?}", target_dir);
+                        println!("  Manifest: {:?}", manifest_path);
+
+                        match ops::integrity::verify_against_manifest(&target_dir, &manifest_path, allow_extra) {
+                            Ok(result) => {
+                                println!();
+                                if result.is_ok() {
+                                    println!("✓ Integrity verification PASSED");
+                                    println!("  {} files verified", result.passed.len());
+                                } else {
+                                    println!("✗ Integrity verification FAILED");
+                                    if !result.mismatched.is_empty() {
+                                        println!("  {} files have different content:", result.mismatched.len());
+                                        for (path, _, _) in &result.mismatched {
+                                            println!("    ✗ {}", path);
+                                        }
+                                    }
+                                    if !result.missing.is_empty() {
+                                        println!("  {} files are missing:", result.missing.len());
+                                        for path in &result.missing {
+                                            println!("    - {}", path);
+                                        }
+                                    }
+                                    if !result.unexpected.is_empty() && !allow_extra {
+                                        println!("  {} unexpected files found:", result.unexpected.len());
+                                        for path in &result.unexpected {
+                                            println!("    + {}", path);
+                                        }
+                                    }
+                                    std::process::exit(1);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("✗ Verification error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        // Remote verification
+                        let fleet_path = config_dir.join("fleet.toml");
+                        let fleet = ops::fleet::load_fleet(&fleet_path)?;
+                        let yacht = fleet.get_yacht(&target)
+                            .ok_or_else(|| anyhow::anyhow!("Yacht '{}' not found in fleet", target))?;
+
+                        println!("Verifying remote yacht: {}", target);
+                        println!("  Host: {}@{}:{}", yacht.ssh_user, yacht.ip, yacht.ssh_port);
+                        println!("  Remote path: {}", yacht.web_root);
+                        println!("  Manifest: {:?}", manifest_path);
+
+                        match ops::integrity::verify_remote(
+                            &manifest_path,
+                            &yacht.ssh_user,
+                            &yacht.ip,
+                            yacht.ssh_port,
+                            &yacht.web_root,
+                            None,
+                        ) {
+                            Ok(result) => {
+                                println!();
+                                if result.is_ok() {
+                                    println!("✓ Remote verification PASSED");
+                                    println!("  {} files verified on {}", result.files_checked, result.yacht);
+                                } else {
+                                    println!("✗ Remote verification FAILED");
+                                    if let Some(err) = &result.error {
+                                        println!("  Error: {}", err);
+                                    }
+                                    if !result.mismatched.is_empty() {
+                                        println!("  {} files have different content:", result.mismatched.len());
+                                        for path in &result.mismatched {
+                                            println!("    ✗ {}", path);
+                                        }
+                                    }
+                                    if !result.missing.is_empty() {
+                                        println!("  {} files are missing:", result.missing.len());
+                                        for path in &result.missing {
+                                            println!("    - {}", path);
+                                        }
+                                    }
+                                    std::process::exit(1);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("✗ Remote verification error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                }
+
+                IntegrityCommands::Hash { file } => {
+                    let file_path = PathBuf::from(&file);
+
+                    if !file_path.exists() {
+                        anyhow::bail!("File not found: {:?}", file_path);
+                    }
+
+                    match ops::integrity::hash_file(&file_path) {
+                        Ok(hash) => {
+                            println!("{}  {}", hash, file);
+                        }
+                        Err(e) => {
+                            eprintln!("✗ Failed to hash file: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+
+                IntegrityCommands::Diff { manifest1, manifest2, changed_only } => {
+                    use wharf_core::integrity;
+
+                    let m1_path = PathBuf::from(&manifest1);
+                    let m2_path = PathBuf::from(&manifest2);
+
+                    if !m1_path.exists() {
+                        anyhow::bail!("Manifest not found: {:?}", m1_path);
+                    }
+                    if !m2_path.exists() {
+                        anyhow::bail!("Manifest not found: {:?}", m2_path);
+                    }
+
+                    let m1 = integrity::load_manifest(&m1_path)?;
+                    let m2 = integrity::load_manifest(&m2_path)?;
+
+                    println!("Comparing manifests:");
+                    println!("  A: {:?}", m1_path);
+                    println!("  B: {:?}", m2_path);
+                    println!();
+
+                    let mut added = Vec::new();
+                    let mut removed = Vec::new();
+                    let mut changed = Vec::new();
+                    let mut unchanged = 0;
+
+                    // Find removed and changed files
+                    for (path, entry1) in &m1.files {
+                        if let Some(entry2) = m2.files.get(path) {
+                            if entry1.hash != entry2.hash {
+                                changed.push(path.clone());
+                            } else {
+                                unchanged += 1;
+                            }
+                        } else {
+                            removed.push(path.clone());
+                        }
+                    }
+
+                    // Find added files
+                    for path in m2.files.keys() {
+                        if !m1.files.contains_key(path) {
+                            added.push(path.clone());
+                        }
+                    }
+
+                    if !changed_only {
+                        println!("Summary:");
+                        println!("  {} files unchanged", unchanged);
+                        println!("  {} files added", added.len());
+                        println!("  {} files removed", removed.len());
+                        println!("  {} files changed", changed.len());
+                        println!();
+                    }
+
+                    if !added.is_empty() {
+                        println!("Added in B:");
+                        for path in &added {
+                            println!("  + {}", path);
+                        }
+                    }
+
+                    if !removed.is_empty() {
+                        println!("Removed from A:");
+                        for path in &removed {
+                            println!("  - {}", path);
+                        }
+                    }
+
+                    if !changed.is_empty() {
+                        println!("Changed:");
+                        for path in &changed {
+                            println!("  ~ {}", path);
+                        }
+                    }
+
+                    if added.is_empty() && removed.is_empty() && changed.is_empty() {
+                        println!("No differences found.");
+                    }
+                }
+            }
+        }
 
         Commands::GenKeys { domain, selector, ssh, tlsa, openpgpkey } => {
             info!("Generating keys for domain: {}", domain);
