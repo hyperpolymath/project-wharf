@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: PMPL-1.0
+# SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
+
+[package]
+name = "project-wharf-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.wharf-core]
+path = "../crates/wharf-core"
+
+[[bin]]
+name = "fuzz_sql_policy"
+path = "fuzz_targets/fuzz_sql_policy.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_integrity"
+path = "fuzz_targets/fuzz_integrity.rs"
+test = false
+doc = false
+bench = false
