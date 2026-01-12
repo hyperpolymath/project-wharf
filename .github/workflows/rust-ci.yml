@@ -1,5 +1,10 @@
+# SPDX-License-Identifier: PMPL-1.0
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 name: Rust CI
 on: [push, pull_request]
+
+permissions: read-all
+
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -Dwarnings
@@ -8,29 +13,29 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - uses: dtolnay/rust-toolchain@d0592fe69e35bc8f12e3dbaf9ad2694d976cb8e3 # stable
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-      
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
+
       - name: Check formatting
         run: cargo fmt --all -- --check
-      
+
       - name: Clippy lints
         run: cargo clippy --all-targets --all-features -- -D warnings
-      
+
       - name: Run tests
         run: cargo test --all-features
-      
+
       - name: Build release
         run: cargo build --release
 
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - uses: dtolnay/rust-toolchain@d0592fe69e35bc8f12e3dbaf9ad2694d976cb8e3 # stable
       - name: Install cargo-audit
         run: cargo install cargo-audit
       - name: Security audit
@@ -41,12 +46,12 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - uses: dtolnay/rust-toolchain@d0592fe69e35bc8f12e3dbaf9ad2694d976cb8e3 # stable
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin
       - name: Generate coverage
         run: cargo tarpaulin --out Xml
-      - uses: codecov/codecov-action@v3
+      - uses: codecov/codecov-action@0cfda1dd0a4ad9efc75517f399d859cd1ea4ced1 # v4
         with:
           files: cobertura.xml

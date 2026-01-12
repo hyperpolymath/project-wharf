@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: PMPL-1.0
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 name: Well-Known Standards (RFC 9116 + RSR)
 on:
   push:
@@ -9,36 +11,37 @@ on:
     paths:
       - '.well-known/**'
   schedule:
-    # Weekly expiry check
     - cron: '0 9 * * 1'
   workflow_dispatch:
+
+permissions: read-all
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+
       - name: RFC 9116 security.txt validation
         run: |
           SECTXT=""
           [ -f ".well-known/security.txt" ] && SECTXT=".well-known/security.txt"
           [ -f "security.txt" ] && SECTXT="security.txt"
-          
+
           if [ -z "$SECTXT" ]; then
             echo "::warning::No security.txt found. See https://github.com/hyperpolymath/well-known-ecosystem"
             exit 0
           fi
-          
+
           # Required: Contact
           grep -q "^Contact:" "$SECTXT" || { echo "::error::Missing Contact field"; exit 1; }
-          
+
           # Required: Expires
           if ! grep -q "^Expires:" "$SECTXT"; then
             echo "::error::Missing Expires field"
             exit 1
           fi
-          
+
           # Check expiry
           EXPIRES=$(grep "^Expires:" "$SECTXT" | cut -d: -f2- | tr -d ' ' | head -1)
           if date -d "$EXPIRES" > /dev/null 2>&1; then
@@ -59,7 +62,7 @@ jobs:
           [ ! -f ".well-known/security.txt" ] && [ ! -f "security.txt" ] && MISSING="$MISSING security.txt"
           [ ! -f ".well-known/ai.txt" ] && MISSING="$MISSING ai.txt"
           [ ! -f ".well-known/humans.txt" ] && MISSING="$MISSING humans.txt"
-          
+
           if [ -n "$MISSING" ]; then
             echo "::warning::Missing RSR recommended files:$MISSING"
             echo "Reference: https://github.com/hyperpolymath/well-known-ecosystem/.well-known/"

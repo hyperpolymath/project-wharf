@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: PMPL-1.0
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 name: OSSF Scorecard
 on:
   push:
@@ -14,17 +16,17 @@ jobs:
       security-events: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
           persist-credentials: false
-      
+
       - name: Run Scorecard
-        uses: ossf/scorecard-action@v2.3.1
+        uses: ossf/scorecard-action@e93faf2ab2f3663b51bc6e62d42b8520f2eff874 # v2.3.1
         with:
           results_file: results.sarif
           results_format: sarif
-      
+
       - name: Upload results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@a4784f2dad6682d68cce8299ef20b1ca931bbdfb # v4
         with:
           sarif_file: results.sarif

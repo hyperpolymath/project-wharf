@@ -1,10 +1,15 @@
+# SPDX-License-Identifier: PMPL-1.0
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 name: PHP Security Check
 on: [push, pull_request]
+
+permissions: read-all
+
 jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
       - name: PHP Security Scan
         run: |
           # Check for dangerous functions
@@ -13,19 +18,19 @@ jobs:
             echo "⚠️ Potentially dangerous PHP functions found:"
             echo "$DANGEROUS"
           fi
-          
+
           # Check for SQL injection patterns
           SQLI=$(grep -rE '\$_(GET|POST|REQUEST).*query|mysqli_query.*\$_' --include="*.php" . 2>/dev/null | grep -v 'vendor/' | head -5 || true)
           if [ -n "$SQLI" ]; then
             echo "⚠️ Potential SQL injection patterns:"
             echo "$SQLI"
           fi
-          
+
           # Check for XSS patterns
           XSS=$(grep -rE 'echo\s+\$_(GET|POST|REQUEST)' --include="*.php" . 2>/dev/null | grep -v 'vendor/' | head -5 || true)
           if [ -n "$XSS" ]; then
             echo "⚠️ Potential XSS patterns (unescaped output):"
             echo "$XSS"
           fi
-          
+
           echo "✅ PHP security scan completed"
