@@ -14,7 +14,7 @@
 //! - **Immutable (Red)**: Read-only, writes blocked unless from Wharf (e.g., wp_users, wp_options)
 //! - **Hybrid (Grey)**: Conditional based on specific columns/values (e.g., transient caches in wp_options)
 
-use sqlparser::ast::{Statement, SetExpr, TableFactor};
+use sqlparser::ast::{Statement, TableFactor};
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::Parser;
 use serde::{Deserialize, Serialize};

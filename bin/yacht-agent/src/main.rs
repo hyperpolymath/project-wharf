@@ -278,13 +278,13 @@ async fn run_db_proxy(
 
 /// Handle a single database connection
 async fn handle_db_connection(
-    mut client: TcpStream,
+    client: TcpStream,
     shadow_addr: &str,
     protocol: &str,
     state: Arc<RwLock<AgentState>>,
 ) -> std::io::Result<()> {
     // Connect to the real database
-    let mut server = TcpStream::connect(shadow_addr).await?;
+    let server = TcpStream::connect(shadow_addr).await?;
 
     let (mut c_read, c_write) = client.into_split();
     let (mut s_read, mut s_write) = server.into_split();

@@ -149,7 +149,7 @@ pub fn sync_to_remote(config: &SyncConfig) -> Result<SyncResult, SyncError> {
 /// Sync files from remote source to local destination (pull)
 pub fn sync_from_remote(config: &SyncConfig) -> Result<SyncResult, SyncError> {
     // For pull, swap source and destination logic
-    let mut pull_config = config.clone();
+    let _pull_config = config.clone();
 
     // Build rsync command
     let mut cmd = Command::new("rsync");
