@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: PMPL-1.0
+# SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
+
+# Cargo configuration for Project Wharf
+
+[alias]
+# Run xtask commands (e.g., cargo xtask build-ebpf)
+xtask = "run --package xtask --"
+
+# Build everything including eBPF
+build-all = "xtask build-all"
+
+# eBPF-specific target configuration
+[target.bpfel-unknown-none]
+rustflags = ["-C", "link-arg=--btf"]

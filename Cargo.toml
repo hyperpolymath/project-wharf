@@ -3,10 +3,12 @@ members = [
     "crates/wharf-core",
     "bin/wharf-cli",
     "bin/yacht-agent",
+    "xtask",
 ]
 # eBPF crate excluded from default build - requires special toolchain (bpf-linker)
-# Build separately with: cd crates/wharf-ebpf && cargo +nightly build --target bpfel-unknown-none
-exclude = ["crates/wharf-ebpf"]
+# Build with: cargo xtask build-ebpf
+# Or manually: cd crates/wharf-ebpf && cargo +nightly build --target bpfel-unknown-none -Z build-std=core
+exclude = ["crates/wharf-ebpf", "fuzz"]
 resolver = "2"
 
 [workspace.package]

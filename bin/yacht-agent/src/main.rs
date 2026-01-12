@@ -37,6 +37,52 @@ use wharf_core::types::HeaderPolicy;
 mod ebpf;
 
 // =============================================================================
+// FIREWALL TYPES
+// =============================================================================
+
+/// Unified firewall type that can be either eBPF XDP or nftables
+#[allow(dead_code)]
+pub enum Firewall {
+    /// eBPF XDP firewall (kernel-level, fastest)
+    Ebpf(ebpf::Shield),
+    /// nftables firewall (userspace, fallback)
+    Nftables(NftablesManager),
+    /// No firewall (not recommended)
+    None,
+}
+
+impl Firewall {
+    /// Check if the firewall is active
+    pub fn is_active(&self) -> bool {
+        match self {
+            Firewall::Ebpf(_) => true,
+            Firewall::Nftables(mgr) => mgr.is_active(),
+            Firewall::None => false,
+        }
+    }
+
+    /// Get the firewall mode name
+    pub fn mode_name(&self) -> &'static str {
+        match self {
+            Firewall::Ebpf(_) => "ebpf",
+            Firewall::Nftables(_) => "nftables",
+            Firewall::None => "none",
+        }
+    }
+
+    /// Block an IP address (if supported)
+    pub fn block_ip(&mut self, ip: std::net::Ipv4Addr) -> Result<(), String> {
+        match self {
+            Firewall::Ebpf(shield) => shield
+                .block_ip(ip)
+                .map_err(|e| format!("eBPF block_ip failed: {}", e)),
+            Firewall::Nftables(mgr) => mgr.block_ip(ip),
+            Firewall::None => Err("No firewall active".to_string()),
+        }
+    }
+}
+
+// =============================================================================
 // CLI ARGUMENTS
 // =============================================================================
 
@@ -152,7 +198,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Firewall mode: {}", args.firewall_mode);
 
     // Initialize firewall based on mode
-    let _shield = match args.firewall_mode.as_str() {
+    let _firewall: Firewall = match args.firewall_mode.as_str() {
         "ebpf" => {
             info!("Attempting to load eBPF XDP firewall on {}", args.xdp_interface);
 
@@ -170,12 +216,17 @@ async fn main() -> anyhow::Result<()> {
                     match ebpf::try_load_shield(path, &args.xdp_interface) {
                         Some(shield) => {
                             info!("eBPF XDP firewall loaded successfully on {}", args.xdp_interface);
-                            Some(shield)
+                            Firewall::Ebpf(shield)
                         }
                         None => {
                             warn!("eBPF loading failed - falling back to nftables");
-                            setup_nftables_firewall().await;
-                            None
+                            match setup_nftables_firewall().await {
+                                Some(mgr) => Firewall::Nftables(mgr),
+                                None => {
+                                    error!("Both eBPF and nftables failed! No firewall active!");
+                                    Firewall::None
+                                }
+                            }
                         }
                     }
                 }
@@ -184,26 +235,48 @@ async fn main() -> anyhow::Result<()> {
                     warn!("Searched: /etc/wharf/wharf-shield.o, /opt/wharf/wharf-shield.o, ./wharf-shield.o");
                     warn!("Build with: cd crates/wharf-ebpf && cargo +nightly build --target bpfel-unknown-none");
                     warn!("Falling back to nftables");
-                    setup_nftables_firewall().await;
-                    None
+                    match setup_nftables_firewall().await {
+                        Some(mgr) => Firewall::Nftables(mgr),
+                        None => {
+                            error!("Both eBPF and nftables failed! No firewall active!");
+                            Firewall::None
+                        }
+                    }
                 }
             }
         }
         "nftables" => {
             info!("Setting up nftables firewall rules");
-            setup_nftables_firewall().await;
-            None
+            match setup_nftables_firewall().await {
+                Some(mgr) => Firewall::Nftables(mgr),
+                None => {
+                    error!("nftables setup failed! No firewall active!");
+                    Firewall::None
+                }
+            }
         }
         "none" => {
             warn!("Firewall disabled - NOT RECOMMENDED FOR PRODUCTION");
-            None
+            Firewall::None
         }
         _ => {
             warn!("Unknown firewall mode '{}', using nftables", args.firewall_mode);
-            setup_nftables_firewall().await;
-            None
+            match setup_nftables_firewall().await {
+                Some(mgr) => Firewall::Nftables(mgr),
+                None => {
+                    error!("nftables setup failed! No firewall active!");
+                    Firewall::None
+                }
+            }
         }
     };
+
+    // Log final firewall status
+    if _firewall.is_active() {
+        info!("Firewall active: {}", _firewall.mode_name());
+    } else {
+        error!("WARNING: No firewall protection active!");
+    }
 
     // Initialize shared state
     let state = Arc::new(RwLock::new(AgentState::new()));
@@ -484,25 +557,73 @@ yacht_integrity_status 1
 // FIREWALL SETUP
 // =============================================================================
 
-/// Set up nftables firewall rules for the Yacht
-async fn setup_nftables_firewall() {
-    // Generate nftables rules for Yacht security
-    // These rules:
-    // 1. Allow HTTP/HTTPS (80, 443)
-    // 2. Allow Nebula mesh (4242 UDP)
-    // 3. Allow the masquerade DB port (3306 TCP, internal only)
-    // 4. Allow the agent API (9001 TCP)
-    // 5. Drop everything else
+/// Default allowed TCP ports for Yacht
+const NFTABLES_TCP_PORTS: &[u16] = &[80, 443, 9001];
 
-    let _rules = r#"
-#!/usr/sbin/nft -f
+/// Default allowed UDP ports for Yacht
+const NFTABLES_UDP_PORTS: &[u16] = &[4242];
 
-# Flush existing yacht rules
+/// nftables firewall manager for runtime rule management
+#[allow(dead_code)]
+pub struct NftablesManager {
+    /// Whether rules have been successfully applied
+    active: bool,
+    /// Additional TCP ports allowed at runtime
+    extra_tcp_ports: Vec<u16>,
+    /// Additional UDP ports allowed at runtime
+    extra_udp_ports: Vec<u16>,
+    /// Blocked IP addresses
+    blocked_ips: Vec<std::net::Ipv4Addr>,
+}
+
+#[allow(dead_code)]
+impl NftablesManager {
+    /// Create a new nftables manager
+    pub fn new() -> Self {
+        Self {
+            active: false,
+            extra_tcp_ports: Vec::new(),
+            extra_udp_ports: Vec::new(),
+            blocked_ips: Vec::new(),
+        }
+    }
+
+    /// Generate the base nftables rules
+    fn generate_rules(&self) -> String {
+        let mut tcp_ports: Vec<u16> = NFTABLES_TCP_PORTS.to_vec();
+        tcp_ports.extend(&self.extra_tcp_ports);
+        let tcp_str = tcp_ports
+            .iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let mut udp_ports: Vec<u16> = NFTABLES_UDP_PORTS.to_vec();
+        udp_ports.extend(&self.extra_udp_ports);
+        let udp_str = udp_ports
+            .iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let blocked_ips_rules = self
+            .blocked_ips
+            .iter()
+            .map(|ip| format!("        ip saddr {} drop", ip))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        format!(
+            r#"#!/usr/sbin/nft -f
+
+# Yacht Agent Firewall Rules
+# Generated by yacht-agent - do not edit manually
+
 table inet yacht
 delete table inet yacht
 
-table inet yacht {
-    chain input {
+table inet yacht {{
+    chain input {{
         type filter hook input priority 0; policy drop;
 
         # Allow established connections
@@ -511,56 +632,216 @@ table inet yacht {
         # Allow loopback
         iif lo accept
 
-        # Allow ICMP for diagnostics (can be disabled for stealth)
-        # ip protocol icmp accept
-        # ip6 nexthdr icmpv6 accept
+        # Blocklist
+{blocked_ips_rules}
 
-        # Allow HTTP/HTTPS
-        tcp dport { 80, 443 } accept
+        # Allow HTTP/HTTPS and Agent API
+        tcp dport {{ {tcp_str} }} accept
 
         # Allow Nebula mesh VPN
-        udp dport 4242 accept
-
-        # Allow agent API (for Wharf mooring)
-        tcp dport 9001 accept
+        udp dport {{ {udp_str} }} accept
 
         # Log and drop everything else
         log prefix "YACHT DROP: " drop
-    }
+    }}
 
-    chain forward {
+    chain forward {{
         type filter hook forward priority 0; policy drop;
-    }
+    }}
 
-    chain output {
+    chain output {{
         type filter hook output priority 0; policy accept;
+    }}
+}}
+"#,
+            blocked_ips_rules = blocked_ips_rules,
+            tcp_str = tcp_str,
+            udp_str = udp_str
+        )
     }
-}
-"#;
 
-    // In production, this would write to /etc/nftables.d/yacht.conf
-    // and reload nftables. For now, just log what we would do.
-    info!("nftables rules configured (dry-run mode)");
-    info!("Allowed ports: 80, 443, 4242/udp, 9001");
-    info!("To apply: save rules to /etc/nftables.d/yacht.conf and run 'nft -f'");
+    /// Apply nftables rules to the kernel
+    pub fn apply(&mut self) -> Result<(), String> {
+        let rules = self.generate_rules();
 
-    // Attempt to apply rules if we have permissions
-    match std::process::Command::new("nft")
-        .args(["-c", "-f", "-"])
-        .stdin(std::process::Stdio::piped())
-        .output()
-    {
-        Ok(output) => {
-            if output.status.success() {
-                info!("nftables rules validated successfully");
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                warn!("nftables validation failed: {}", stderr);
+        // First validate the rules
+        let validate = std::process::Command::new("nft")
+            .args(["-c", "-f", "-"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn();
+
+        let mut validate_child = match validate {
+            Ok(child) => child,
+            Err(e) => {
+                return Err(format!("Failed to spawn nft for validation: {}", e));
+            }
+        };
+
+        if let Some(mut stdin) = validate_child.stdin.take() {
+            use std::io::Write;
+            if let Err(e) = stdin.write_all(rules.as_bytes()) {
+                return Err(format!("Failed to write rules for validation: {}", e));
             }
         }
+
+        let validate_output = validate_child
+            .wait_with_output()
+            .map_err(|e| format!("Failed to wait for validation: {}", e))?;
+
+        if !validate_output.status.success() {
+            let stderr = String::from_utf8_lossy(&validate_output.stderr);
+            return Err(format!("nftables validation failed: {}", stderr));
+        }
+
+        // Now actually apply the rules
+        let apply = std::process::Command::new("nft")
+            .args(["-f", "-"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn();
+
+        let mut apply_child = match apply {
+            Ok(child) => child,
+            Err(e) => {
+                return Err(format!("Failed to spawn nft for application: {}", e));
+            }
+        };
+
+        if let Some(mut stdin) = apply_child.stdin.take() {
+            use std::io::Write;
+            if let Err(e) = stdin.write_all(rules.as_bytes()) {
+                return Err(format!("Failed to write rules: {}", e));
+            }
+        }
+
+        let apply_output = apply_child
+            .wait_with_output()
+            .map_err(|e| format!("Failed to wait for nft: {}", e))?;
+
+        if apply_output.status.success() {
+            self.active = true;
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&apply_output.stderr);
+            Err(format!("nftables application failed: {}", stderr))
+        }
+    }
+
+    /// Block an IP address
+    pub fn block_ip(&mut self, ip: std::net::Ipv4Addr) -> Result<(), String> {
+        if !self.blocked_ips.contains(&ip) {
+            self.blocked_ips.push(ip);
+        }
+        if self.active {
+            // Apply immediately via nft add rule
+            let result = std::process::Command::new("nft")
+                .args([
+                    "add",
+                    "rule",
+                    "inet",
+                    "yacht",
+                    "input",
+                    "ip",
+                    "saddr",
+                    &ip.to_string(),
+                    "drop",
+                ])
+                .output();
+
+            match result {
+                Ok(output) if output.status.success() => {
+                    info!("Blocked IP: {}", ip);
+                    Ok(())
+                }
+                Ok(output) => {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    Err(format!("Failed to block IP {}: {}", ip, stderr))
+                }
+                Err(e) => Err(format!("Failed to run nft: {}", e)),
+            }
+        } else {
+            Ok(()) // Will be applied on next full apply()
+        }
+    }
+
+    /// Allow an additional TCP port
+    pub fn allow_tcp_port(&mut self, port: u16) -> Result<(), String> {
+        if !self.extra_tcp_ports.contains(&port) {
+            self.extra_tcp_ports.push(port);
+        }
+        if self.active {
+            self.apply() // Reapply all rules
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Allow an additional UDP port
+    pub fn allow_udp_port(&mut self, port: u16) -> Result<(), String> {
+        if !self.extra_udp_ports.contains(&port) {
+            self.extra_udp_ports.push(port);
+        }
+        if self.active {
+            self.apply() // Reapply all rules
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Check if the firewall is active
+    pub fn is_active(&self) -> bool {
+        self.active
+    }
+
+    /// Remove the yacht firewall table
+    pub fn cleanup(&mut self) -> Result<(), String> {
+        let result = std::process::Command::new("nft")
+            .args(["delete", "table", "inet", "yacht"])
+            .output();
+
+        match result {
+            Ok(output) if output.status.success() => {
+                self.active = false;
+                info!("nftables yacht table removed");
+                Ok(())
+            }
+            Ok(_) => {
+                // Table might not exist, that's fine
+                self.active = false;
+                Ok(())
+            }
+            Err(e) => Err(format!("Failed to cleanup nftables: {}", e)),
+        }
+    }
+}
+
+impl Default for NftablesManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Set up nftables firewall rules for the Yacht
+async fn setup_nftables_firewall() -> Option<NftablesManager> {
+    info!("Setting up nftables firewall...");
+    info!("Allowed TCP ports: {:?}", NFTABLES_TCP_PORTS);
+    info!("Allowed UDP ports: {:?}", NFTABLES_UDP_PORTS);
+
+    let mut manager = NftablesManager::new();
+
+    match manager.apply() {
+        Ok(()) => {
+            info!("nftables firewall applied successfully");
+            Some(manager)
+        }
         Err(e) => {
-            warn!("nftables not available: {} - firewall rules not applied", e);
-            warn!("Install nftables or use eBPF mode with CAP_BPF capability");
+            error!("nftables setup failed: {}", e);
+            warn!("Firewall NOT active! Ensure you have CAP_NET_ADMIN or run as root");
+            warn!("Alternatively, use eBPF mode with CAP_BPF capability");
+            None
         }
     }
 }
