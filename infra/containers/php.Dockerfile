@@ -5,11 +5,13 @@
 # ====================================
 # Hardened PHP runtime for CMS workloads.
 #
+# Legacy build (development only). Production images should be built with
+# Cerro Torre manifests in infra/cerro/.
 # Build: podman build -t yacht-php:latest -f infra/containers/php.Dockerfile .
 # Run:   podman run -d -p 9000:9000 -v ./html:/var/www/html:ro yacht-php:latest
 
-# Use Chainguard if available, fallback to Alpine
-ARG BASE_IMAGE=docker.io/library/php:8.3-fpm-alpine
+# Cerro Torre base image (fallback to upstream for dev builds)
+ARG BASE_IMAGE=registry.cerro-torre.local/php/php:8.3-fpm
 
 FROM ${BASE_IMAGE}
 

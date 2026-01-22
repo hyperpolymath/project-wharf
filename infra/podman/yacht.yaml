@@ -5,8 +5,12 @@
 # ========================================================
 # Two-container architecture: OpenLiteSpeed (web+PHP) + Agent (security)
 #
+# Legacy path (development only):
 # Deploy: podman kube play infra/podman/yacht.yaml
 # Remove: podman kube down infra/podman/yacht.yaml
+#
+# Preferred path (production): use infra/svalinn/yacht.yaml with
+# Svalinn + Vordr + Cerro Torre images and attestations.
 #
 # Architecture:
 # - web: OpenLiteSpeed + PHP 8.3 (LSAPI) - serves WordPress
@@ -230,7 +234,7 @@ spec:
 
   containers:
     - name: mariadb
-      image: cgr.dev/chainguard/mariadb:latest
+      image: registry.cerro-torre.local/wharf/mariadb:0.1.0
       ports:
         # Shadow port (not exposed externally)
         - containerPort: 3306

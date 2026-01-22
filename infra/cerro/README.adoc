@@ -1,0 +1,20 @@
+= Cerro Torre Manifests (Project Wharf)
+
+These `.ctp` manifests define the supply-chain verified images for the Yacht runtime.
+They are intentionally strict and require source hashes and provenance before building.
+
+== Workflow
+
+. Fill in `TO_BE_FILLED_WITH_REAL_HASH` entries with real hashes.
+. Run `ct verify` on each manifest.
+. Build and publish OCI images from the verified manifests.
+. Update `infra/svalinn/yacht.yaml` tags when promoting new releases.
+
+== Manifests
+
+* `yacht-web.ctp` — OpenLiteSpeed + PHP runtime
+* `yacht-agent.ctp` — Wharf agent (Rust, distroless)
+* `yacht-mariadb.ctp` — MariaDB for WordPress
+* `yacht-redis.ctp` — Redis cache
+* `yacht-memcached.ctp` — Memcached cache
+* `yacht-arango.ctp` — ArangoDB graph/document store

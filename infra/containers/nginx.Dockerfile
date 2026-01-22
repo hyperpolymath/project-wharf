@@ -5,10 +5,12 @@
 # ==================================
 # Hardened reverse proxy with security headers.
 #
+# Legacy build (development only). Production images should be built with
+# Cerro Torre manifests in infra/cerro/.
 # Build: podman build -t yacht-nginx:latest -f infra/containers/nginx.Dockerfile .
 # Run:   podman run -d -p 8080:8080 -v ./html:/var/www/html:ro yacht-nginx:latest
 
-ARG BASE_IMAGE=docker.io/library/nginx:alpine
+ARG BASE_IMAGE=registry.cerro-torre.local/nginx/nginx:1.26
 
 FROM ${BASE_IMAGE}
 

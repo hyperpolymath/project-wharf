@@ -1,0 +1,129 @@
+# SPDX-License-Identifier: PMPL-1.0
+# SPDX-FileCopyrightText: 2026 Jonathan D. A. Jewell <hyperpolymath>
+#
+# Svalinn Compose Definition for Project Wharf (Yacht Runtime)
+# ============================================================
+# Primary deployment path using Svalinn + Vordr runtime and Cerro Torre images.
+# This replaces the legacy podman kube play flow.
+
+version: "1.0"
+
+x-svalinn:
+  policy: strict
+  attestations:
+    require-sbom: true
+    require-signature: true
+    require-provenance: true
+
+services:
+  web:
+    image: registry.cerro-torre.local/wharf/yacht-web:0.1.0
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - web-root:/var/www/html:ro
+      - uploads:/var/www/html/wp-content/uploads
+      - lscache:/dev/shm/lscache
+      - certs:/etc/letsencrypt:ro
+    environment:
+      DB_HOST: "agent"
+      DB_PORT: "3306"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      MEMCACHED_HOST: "memcached"
+      MEMCACHED_PORT: "11211"
+    depends_on:
+      - agent
+      - db
+      - redis
+      - memcached
+    x-svalinn:
+      policy: strict
+      verify: true
+
+  agent:
+    image: registry.cerro-torre.local/wharf/yacht-agent:0.1.0
+    volumes:
+      - agent-config:/etc/wharf:ro
+      - integrity-db:/var/lib/wharf
+    environment:
+      SHADOW_DB_HOST: "db"
+      SHADOW_DB_PORT: "33060"
+      DB_PROTOCOL: "mysql"
+      XDP_INTERFACE: "eth0"
+      FIREWALL_MODE: "nftables"
+      METRICS_ENABLED: "true"
+    cap_add:
+      - NET_ADMIN
+      - BPF
+    cap_drop:
+      - ALL
+    read_only: true
+    x-svalinn:
+      policy: strict
+      verify: true
+
+  db:
+    image: registry.cerro-torre.local/wharf/mariadb:0.1.0
+    ports:
+      - "33060:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+      - db-config:/etc/mysql/conf.d:ro
+    environment:
+      MYSQL_DATABASE: "wordpress"
+      MYSQL_USER: "wordpress"
+      MYSQL_PASSWORD: "CHANGE_ME_wordpress_password"
+      MYSQL_ROOT_PASSWORD: "CHANGE_ME_root_password"
+    x-svalinn:
+      policy: strict
+      verify: true
+
+  redis:
+    image: registry.cerro-torre.local/wharf/redis:0.1.0
+    volumes:
+      - redis-data:/data
+    x-svalinn:
+      policy: standard
+      verify: true
+
+  memcached:
+    image: registry.cerro-torre.local/wharf/memcached:0.1.0
+    x-svalinn:
+      policy: standard
+      verify: true
+
+  arango:
+    image: registry.cerro-torre.local/wharf/arangodb:0.1.0
+    ports:
+      - "8529:8529"
+    volumes:
+      - arango-data:/var/lib/arangodb3
+    environment:
+      ARANGO_ROOT_PASSWORD: "CHANGE_ME_arango_root_password"
+    x-svalinn:
+      policy: strict
+      verify: true
+
+volumes:
+  web-root:
+    driver: local
+  uploads:
+    driver: local
+  lscache:
+    driver: local
+  certs:
+    driver: local
+  agent-config:
+    driver: local
+  integrity-db:
+    driver: local
+  db-data:
+    driver: local
+  db-config:
+    driver: local
+  redis-data:
+    driver: local
+  arango-data:
+    driver: local

@@ -6,6 +6,8 @@
 # TRUE DISTROLESS - No shell, no libc, no attack surface.
 # Just the statically-linked Rust binary.
 #
+# Legacy build (development only). Production images should be built with
+# Cerro Torre manifests in infra/cerro/.
 # Build: podman build -t yacht-agent:latest -f infra/containers/agent.Dockerfile .
 # Run:   podman run -d -p 3306:3306 -p 9001:9001 yacht-agent:latest
 
@@ -46,7 +48,8 @@ RUN file target/x86_64-unknown-linux-musl/release/yacht-agent | grep -q "statica
 # -----------------------------------------------------------------------------
 # This image contains NOTHING - no shell, no package manager, no libc
 # Attack surface: essentially zero
-FROM cgr.dev/chainguard/static:latest
+ARG RUNTIME_IMAGE=registry.cerro-torre.local/base/static:latest
+FROM ${RUNTIME_IMAGE}
 
 LABEL org.opencontainers.image.title="Yacht Agent"
 LABEL org.opencontainers.image.description="Database proxy and security enforcer for Project Wharf"

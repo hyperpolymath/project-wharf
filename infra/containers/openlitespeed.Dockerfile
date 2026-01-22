@@ -6,6 +6,8 @@
 # High-performance web server with native PHP LSAPI (faster than FastCGI).
 # Includes WordPress-optimized configuration and LiteSpeed Cache support.
 #
+# Legacy build (development only). Production images should be built with
+# Cerro Torre manifests in infra/cerro/.
 # Build: podman build -t yacht-web:latest -f infra/containers/openlitespeed.Dockerfile .
 # Run:   podman run -d -p 8080:8080 -v ./html:/var/www/html:ro yacht-web:latest
 
