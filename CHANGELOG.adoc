@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0
+// SPDX-License-Identifier: PMPL-1.0-or-later
 = Changelog
 
 All notable changes to Project Wharf will be documented in this file.
