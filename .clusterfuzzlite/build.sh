@@ -4,7 +4,7 @@
 #
 # ClusterFuzzLite build script for Rust fuzzing
 
-cd $SRC/project-wharf
+cd "$SRC"/project-wharf
 
 # Install nightly for fuzzing
 rustup install nightly
