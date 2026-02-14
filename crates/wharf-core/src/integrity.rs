@@ -175,15 +175,13 @@ fn walk_directory(
 
 fn should_exclude(path: &str, excludes: &[String]) -> bool {
     for pattern in excludes {
-        if pattern.starts_with('*') {
+        if let Some(suffix) = pattern.strip_prefix('*') {
             // Suffix match (e.g., "*.log")
-            let suffix = &pattern[1..];
             if path.ends_with(suffix) {
                 return true;
             }
-        } else if pattern.ends_with('*') {
+        } else if let Some(prefix) = pattern.strip_suffix('*') {
             // Prefix match (e.g., "test_*")
-            let prefix = &pattern[..pattern.len() - 1];
             if path.starts_with(prefix) {
                 return true;
             }

@@ -60,20 +60,15 @@ impl Default for DatabaseConfig {
 }
 
 /// CMS adapter type
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum Adapter {
+    #[default]
     WordPress,
     Drupal,
     Moodle,
     Joomla,
     Custom,
-}
-
-impl Default for Adapter {
-    fn default() -> Self {
-        Self::WordPress
-    }
 }
 
 /// Security policy configuration
@@ -121,6 +116,9 @@ pub struct Yacht {
     pub policy: PolicyConfig,
     /// Path to web root on the yacht
     pub web_root: String,
+    /// SSH identity file for this yacht (overrides fleet default)
+    #[serde(default)]
+    pub ssh_identity_file: Option<String>,
     /// Tags for grouping/filtering
     pub tags: Vec<String>,
     /// Whether this yacht is enabled
@@ -139,6 +137,7 @@ impl Default for Yacht {
             database: DatabaseConfig::default(),
             policy: PolicyConfig::default(),
             web_root: "/var/www/html".to_string(),
+            ssh_identity_file: None,
             tags: Vec::new(),
             enabled: true,
         }

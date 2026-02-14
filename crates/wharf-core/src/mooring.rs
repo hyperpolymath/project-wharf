@@ -16,7 +16,7 @@
 //!
 //! ## Security Model
 //!
-//! - All requests are Ed25519 signed
+//! - All requests are Ed448 + ML-DSA-87 hybrid signed (post-quantum safe)
 //! - Yacht maintains an allow-list of Wharf public keys
 //! - Emergency override via FIDO2 physical presence
 //! - Manifests use BLAKE3 for integrity verification
@@ -416,7 +416,7 @@ pub struct VerifyResponse {
 // HELPER FUNCTIONS
 // =============================================================================
 
-/// Generate a unique session ID
+/// Generate a unique session ID using CSPRNG
 pub fn generate_session_id() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -425,20 +425,15 @@ pub fn generate_session_id() -> String {
         .unwrap_or_default()
         .as_nanos();
 
-    // Simple session ID: timestamp + random suffix
-    format!("moor-{:x}-{:04x}", timestamp, rand_u16())
+    let random_bytes = crate::crypto::secure_random_bytes(8);
+    let suffix = hex::encode(&random_bytes[..4]);
+    format!("moor-{:x}-{}", timestamp, suffix)
 }
 
-/// Generate a nonce for replay protection
+/// Generate a nonce for replay protection using CSPRNG
 pub fn generate_nonce() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-
-    format!("{:x}-{:08x}", timestamp, rand_u32())
+    let random_bytes = crate::crypto::secure_random_bytes(16);
+    hex::encode(random_bytes)
 }
 
 /// Get current Unix timestamp
@@ -451,23 +446,49 @@ pub fn current_timestamp() -> u64 {
         .as_secs()
 }
 
-// Simple random number generation (no external dependency)
-fn rand_u16() -> u16 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .subsec_nanos();
-    (nanos & 0xFFFF) as u16
+/// Compute canonical bytes for a mooring init request (for signing)
+pub fn canonical_init_bytes(request: &MooringInitRequest) -> Vec<u8> {
+    // All fields except signature, deterministic ordering
+    let mut buf = Vec::new();
+    buf.extend_from_slice(request.version.as_bytes());
+    buf.extend_from_slice(request.wharf_pubkey.as_bytes());
+    for layer in &request.layers {
+        buf.extend_from_slice(&serde_json::to_vec(layer).unwrap_or_default());
+    }
+    buf.extend_from_slice(&request.timestamp.to_le_bytes());
+    buf.extend_from_slice(request.nonce.as_bytes());
+    buf.push(request.force as u8);
+    buf.push(request.dry_run as u8);
+    buf
 }
 
-fn rand_u32() -> u32 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .subsec_nanos();
-    nanos
+/// Compute canonical bytes for a commit request (for signing)
+pub fn canonical_commit_bytes(request: &CommitRequest) -> Vec<u8> {
+    let mut buf = Vec::new();
+    buf.extend_from_slice(request.session_id.as_bytes());
+    for layer in &request.layers {
+        buf.extend_from_slice(&serde_json::to_vec(layer).unwrap_or_default());
+    }
+    buf.extend_from_slice(&request.timestamp.to_le_bytes());
+    buf
+}
+
+/// Compute canonical bytes for a verify request (for signing)
+pub fn canonical_verify_bytes(request: &VerifyRequest) -> Vec<u8> {
+    let mut buf = Vec::new();
+    buf.extend_from_slice(request.session_id.as_bytes());
+    buf.extend_from_slice(&serde_json::to_vec(&request.layer).unwrap_or_default());
+    buf.extend_from_slice(&request.timestamp.to_le_bytes());
+    buf
+}
+
+/// Compute canonical bytes for an abort request (for signing)
+pub fn canonical_abort_bytes(request: &AbortRequest) -> Vec<u8> {
+    let mut buf = Vec::new();
+    buf.extend_from_slice(request.session_id.as_bytes());
+    buf.extend_from_slice(request.reason.as_bytes());
+    buf.extend_from_slice(&request.timestamp.to_le_bytes());
+    buf
 }
 
 #[cfg(test)]

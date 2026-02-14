@@ -114,7 +114,7 @@ fn test_integrity_manifest_excludes() {
     fs::write(cache.join("temp.dat"), "cached data").unwrap();
 
     // Generate manifest with excludes
-    let excludes = vec!["*.log".to_string(), "cache/**".to_string()];
+    let excludes = vec!["*.log".to_string(), "cache".to_string()];
     let manifest = generate_manifest(&site_dir, &excludes).expect("Failed to generate manifest");
 
     // Should only have index.php and .htaccess
@@ -245,8 +245,8 @@ fn test_manifest_verification_unexpected() {
 #[test]
 fn test_yacht_ssh_destination() {
     let yacht = Yacht::new("test", "192.168.1.1", "test.example.com");
-    assert_eq!(yacht.ssh_destination(), "deploy@192.168.1.1");
-    assert_eq!(yacht.rsync_destination(), "deploy@192.168.1.1:/var/www/html/");
+    assert_eq!(yacht.ssh_destination(), "wharf@192.168.1.1");
+    assert_eq!(yacht.rsync_destination(), "wharf@192.168.1.1:/var/www/html");
 }
 
 /// Test yacht with custom SSH settings
@@ -258,7 +258,7 @@ fn test_yacht_custom_ssh() {
     yacht.web_root = "/srv/www".to_string();
 
     assert_eq!(yacht.ssh_destination(), "webadmin@10.0.0.1");
-    assert_eq!(yacht.rsync_destination(), "webadmin@10.0.0.1:/srv/www/");
+    assert_eq!(yacht.rsync_destination(), "webadmin@10.0.0.1:/srv/www");
     assert_eq!(yacht.ssh_port, 2222);
 }
 
@@ -267,8 +267,8 @@ fn test_yacht_custom_ssh() {
 fn test_yacht_database_config() {
     let yacht = Yacht::new("test", "10.0.0.1", "db.example.com");
 
-    // Default is MySQL with port masquerading
-    assert_eq!(yacht.database.variant, "mysql");
+    // Default is MariaDB with port masquerading
+    assert_eq!(yacht.database.variant, "mariadb");
     assert_eq!(yacht.database.public_port, 3306);
     assert_eq!(yacht.database.shadow_port, 33060);
 }

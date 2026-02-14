@@ -234,7 +234,7 @@ spec:
 
   containers:
     - name: mariadb
-      image: registry.cerro-torre.local/wharf/mariadb:0.1.0
+      image: cgr.dev/chainguard/mariadb:latest
       ports:
         # Shadow port (not exposed externally)
         - containerPort: 3306

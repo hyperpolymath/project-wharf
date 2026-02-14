@@ -1,19 +1,27 @@
-// SPDX-License-Identifier: MIT
-// SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <jonathan.jewell@open.ac.uk>
 
 //! # Mooring Operations
 //!
-//! Handles the "mooring" process - syncing state between Wharf and Yacht.
+//! Handles the "mooring" process — syncing state between Wharf and Yacht
+//! via the yacht-agent's HTTP mooring API.
+//!
+//! Flow: init → verify → rsync → commit
 
 use std::path::Path;
 use anyhow::{Context, Result};
 use tracing::{info, warn};
 
+use wharf_core::config::MooringConfig;
+use wharf_core::crypto::{generate_hybrid_keypair, HybridKeypair};
 use wharf_core::fleet::{Fleet, Yacht};
-use wharf_core::integrity::{generate_manifest, save_manifest, verify_manifest};
+use wharf_core::integrity::{generate_manifest, save_manifest};
+use wharf_core::mooring::MooringLayer;
+use wharf_core::mooring_client::MooringClient;
 use wharf_core::sync::{sync_to_remote, check_rsync, check_ssh_connection, SyncConfig};
 
 /// Options for the mooring process
+#[allow(dead_code)]
 pub struct MoorOptions {
     pub force: bool,
     pub dry_run: bool,
@@ -26,14 +34,17 @@ pub struct MoorResult {
     pub files_synced: u64,
     pub integrity_verified: bool,
     pub yacht_name: String,
+    pub snapshot_id: Option<String>,
 }
 
-/// Execute the mooring process
-pub fn execute_moor(
+/// Execute the mooring process via yacht-agent HTTP API
+pub async fn execute_moor(
     fleet: &Fleet,
     yacht_name: &str,
     source_dir: &Path,
     options: &MoorOptions,
+    _keypair: &HybridKeypair,
+    mooring_config: &MooringConfig,
 ) -> Result<MoorResult> {
     // Find the yacht
     let yacht = fleet.get_yacht(yacht_name)
@@ -44,6 +55,9 @@ pub fn execute_moor(
     // Pre-flight checks
     preflight_checks(yacht)?;
 
+    // Determine layers to sync
+    let layers = parse_layers(&options.layers);
+
     // Generate integrity manifest for local files
     info!("Generating integrity manifest...");
     let manifest = generate_manifest(source_dir, &fleet.sync_excludes)
@@ -51,23 +65,71 @@ pub fn execute_moor(
 
     info!("Manifest contains {} files", manifest.files.len());
 
-    // Save manifest
+    // Save manifest locally
     let manifest_path = source_dir.join(".wharf-manifest.json");
     save_manifest(&manifest, &manifest_path)
         .context("Failed to save manifest")?;
 
-    // Prepare sync configuration
+    // Create mooring client targeting the yacht-agent
+    let base_url = format!("http://{}:9001", yacht.ip);
+    // We need to generate a temporary keypair for the client since we can't move the reference
+    let client_keypair = generate_hybrid_keypair()
+        .context("Failed to generate session keypair")?;
+    let client = MooringClient::new(&base_url, client_keypair);
+
+    // Step 1: Init mooring session
+    info!("Initiating mooring session with {}...", yacht.name);
+    let init_resp = client
+        .init_session(layers.clone(), options.force, options.dry_run)
+        .await
+        .context("Mooring init failed")?;
+
+    let session_id = &init_resp.session_id;
+    info!("Session established: {}", session_id);
+    info!("Accepted layers: {:?}", init_resp.accepted_layers);
+
+    // Step 2: Verify each layer
+    for layer in &init_resp.accepted_layers {
+        info!("Verifying layer: {:?}", layer);
+        let layer_manifest = wharf_core::mooring::LayerManifest {
+            files: manifest.files.iter().map(|(k, v)| (k.clone(), v.hash.clone())).collect(),
+            total_size: manifest.files.values().map(|f| f.size).sum(),
+            file_count: manifest.files.len(),
+            root_hash: wharf_core::crypto::hash_blake3(
+                &serde_json::to_vec(&manifest.files).unwrap_or_default(),
+            ),
+        };
+
+        let verify_resp = client
+            .verify_layer(session_id, *layer, layer_manifest)
+            .await
+            .context(format!("Verify failed for layer {:?}", layer))?;
+
+        if verify_resp.verified {
+            info!("Layer {:?}: {} files matched", layer, verify_resp.matched_files);
+        } else {
+            warn!("Layer {:?}: {} files differ, {} missing",
+                layer,
+                verify_resp.differing_files.len(),
+                verify_resp.missing_files.len(),
+            );
+        }
+    }
+
+    // Step 3: Rsync files
+    let identity_file = resolve_identity_file(yacht, mooring_config)
+        .map(std::path::PathBuf::from);
+
     let sync_config = SyncConfig {
         source: source_dir.to_path_buf(),
         destination: yacht.rsync_destination(),
         ssh_port: yacht.ssh_port,
-        identity_file: None, // TODO: Load from config
+        identity_file,
         excludes: fleet.sync_excludes.clone(),
         dry_run: options.dry_run,
-        delete: options.force, // Only delete if force is enabled
+        delete: options.force,
     };
 
-    // Execute sync
     if options.dry_run {
         info!("[DRY RUN] Would sync {} files to {}", manifest.files.len(), yacht.domain);
     } else {
@@ -77,11 +139,72 @@ pub fn execute_moor(
         info!("Transferred {} files", result.files_transferred);
     }
 
+    // Step 4: Commit
+    info!("Committing mooring session...");
+    let commit_resp = client
+        .commit(session_id, init_resp.accepted_layers)
+        .await
+        .context("Mooring commit failed")?;
+
+    if !commit_resp.success {
+        anyhow::bail!("Commit failed: {}", commit_resp.error.unwrap_or_default());
+    }
+
+    info!("Mooring committed successfully. Snapshot: {:?}", commit_resp.snapshot_id);
+
     Ok(MoorResult {
         files_synced: manifest.files.len() as u64,
         integrity_verified: true,
         yacht_name: yacht_name.to_string(),
+        snapshot_id: commit_resp.snapshot_id,
     })
+}
+
+/// Resolve the SSH identity file for rsync
+///
+/// Resolution order:
+/// 1. Yacht-specific override (`yacht.ssh_identity_file`)
+/// 2. Fleet-wide default (`mooring_config.ssh_identity`)
+/// 3. Default Ed448 key (`~/.ssh/id_ed448`)
+/// 4. None (use SSH agent)
+fn resolve_identity_file(yacht: &Yacht, config: &MooringConfig) -> Option<String> {
+    // Yacht-specific override
+    if let Some(ref identity) = yacht.ssh_identity_file {
+        if Path::new(identity).exists() {
+            return Some(identity.clone());
+        }
+        warn!("Yacht identity file '{}' not found, trying fleet default", identity);
+    }
+
+    // Fleet-wide default
+    if let Some(ref identity) = config.ssh_identity {
+        if Path::new(identity).exists() {
+            return Some(identity.clone());
+        }
+        warn!("Fleet identity file '{}' not found, trying ~/.ssh/id_ed448", identity);
+    }
+
+    // Default Ed448 key
+    if let Ok(home) = std::env::var("HOME") {
+        let ed448_key = std::path::Path::new(&home).join(".ssh").join("id_ed448");
+        if ed448_key.exists() {
+            return Some(ed448_key.to_string_lossy().to_string());
+        }
+    }
+
+    // Fall back to SSH agent
+    None
+}
+
+/// Load or generate a hybrid keypair for the CLI
+pub fn load_or_generate_keypair(config_dir: &Path) -> Result<HybridKeypair> {
+    let key_dir = config_dir.join(".wharf").join("keys");
+    let _key_path = key_dir.join("wharf.key");
+
+    // For MVP, always generate a new keypair
+    // TODO: Persist keypair to disk with proper file permissions
+    info!("Generating hybrid keypair for mooring session...");
+    generate_hybrid_keypair().context("Failed to generate hybrid keypair")
 }
 
 /// Run pre-flight checks before mooring
@@ -90,12 +213,12 @@ fn preflight_checks(yacht: &Yacht) -> Result<()> {
     if !check_rsync() {
         anyhow::bail!("rsync is not installed. Please install rsync.");
     }
-    info!("✓ rsync available");
+    info!("rsync available");
 
     // Check SSH connection
     info!("Testing SSH connection to {}...", yacht.ip);
     match check_ssh_connection(&yacht.ssh_destination(), yacht.ssh_port, None) {
-        Ok(true) => info!("✓ SSH connection successful"),
+        Ok(true) => info!("SSH connection successful"),
         Ok(false) => {
             warn!("SSH connection test returned false");
             anyhow::bail!("Cannot connect to yacht via SSH. Check your credentials.");
@@ -109,22 +232,41 @@ fn preflight_checks(yacht: &Yacht) -> Result<()> {
     Ok(())
 }
 
+/// Parse layer names to MooringLayer enum values
+fn parse_layers(layer_names: &[String]) -> Vec<MooringLayer> {
+    if layer_names.is_empty() {
+        // Default layers
+        return vec![MooringLayer::Config, MooringLayer::Files];
+    }
+
+    layer_names
+        .iter()
+        .filter_map(|name| match name.to_lowercase().as_str() {
+            "config" => Some(MooringLayer::Config),
+            "files" => Some(MooringLayer::Files),
+            "database" | "db" => Some(MooringLayer::Database),
+            "assets" => Some(MooringLayer::Assets),
+            "secrets" => Some(MooringLayer::Secrets),
+            _ => {
+                warn!("Unknown layer '{}', skipping", name);
+                None
+            }
+        })
+        .collect()
+}
+
 /// Verify yacht state matches local manifest
+#[allow(dead_code)]
 pub fn verify_yacht_state(
     yacht: &Yacht,
     local_manifest_path: &Path,
 ) -> Result<bool> {
-    // This would require running a remote command to verify
-    // For now, we trust the sync and verify locally
     info!("Verifying yacht state for {}...", yacht.name);
 
     let manifest = wharf_core::integrity::load_manifest(local_manifest_path)
         .context("Failed to load manifest")?;
 
     info!("Manifest loaded: {} files", manifest.files.len());
-
-    // In a full implementation, we'd run a remote verification command
-    // For v1.0, we trust the rsync completed successfully
 
     Ok(true)
 }

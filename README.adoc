@@ -1,6 +1,6 @@
 image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
 // SPDX-License-Identifier: PMPL-1.0-or-later
-// SPDX-FileCopyrightText: 2025 hyperpolymath
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <jonathan.jewell@open.ac.uk>
 
 = Project Wharf
 image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
@@ -204,6 +204,38 @@ echo "include_once '/opt/wharf/adapters/drupal/settings.php';" >> sites/default/
 
 == Security Model
 
+=== Cryptographic Primitives
+
+Wharf uses a *post-quantum hybrid* signature scheme and modern cryptographic primitives:
+
+|===
+| Primitive | Algorithm | Purpose
+
+| *Hybrid Signatures* | Ed448 + ML-DSA-87 (Dilithium5) | All mooring requests and responses — both must verify
+| *File Integrity* | BLAKE3 | Fast hashing for filesystem manifests
+| *Provenance Hashing* | SHAKE3-512 (FIPS 202) | Long-term provenance and KDF input
+| *Symmetric Encryption* | XChaCha20-Poly1305 | AEAD for secrets in transit
+| *Key Derivation* | HKDF-SHAKE512 | Derive per-session keys
+| *Password Hashing* | Argon2id (512 MiB, 8 iter, 4 lanes) | Wharf controller only — never on Yacht
+| *Random Generation* | ChaCha20-DRBG (512-bit seed) | All key generation and nonces
+|===
+
+The hybrid signature scheme ensures that *both* Ed448 (classical) and ML-DSA-87 (post-quantum) signatures must verify. An attacker must break *both* algorithms — quantum or classical — to forge a signature.
+
+=== Mooring Protocol
+
+The Wharf controller syncs state to the Yacht via a four-phase HTTP protocol:
+
+[source]
+----
+1. INIT     Wharf → Yacht   "I want to sync layers X, Y, Z"  (signed)
+2. VERIFY   Wharf → Yacht   "Here's my BLAKE3 manifest"       (per layer)
+3. RSYNC    Wharf → Yacht   SSH-based file transfer            (delta only)
+4. COMMIT   Wharf → Yacht   "Lock it in, create snapshot"     (signed)
+----
+
+All init and commit requests carry hybrid signatures. The Yacht verifies both Ed448 and ML-DSA-87 components before accepting.
+
 === Threat Model
 
 Wharf assumes:
@@ -222,7 +254,36 @@ Wharf assumes:
 | Plugin Backdoor | Plugins directory is read-only (OverlayFS)
 | Config Tampering | `wp-config.php` changes trigger instant revert
 | Network Sniffing | Nebula mesh encrypts all admin traffic
+| Signature Forgery | Ed448 + ML-DSA-87 hybrid — quantum-resistant
+| Key Compromise | Argon2id (512 MiB) protects stored keys
 |===
+
+== Container Deployment
+
+Wharf uses hardened Chainguard container images with the hyperpolymath container toolchain:
+
+|===
+| Component | Image | Role
+
+| Builder | `cgr.dev/chainguard/wolfi-base:latest` | Compilation and asset building
+| Runtime (Agent) | `cgr.dev/chainguard/static:latest` | Minimal distroless runtime
+| Web Server | `cgr.dev/chainguard/nginx:latest` | Hardened nginx
+| Database | `cgr.dev/chainguard/mariadb:latest` | MariaDB with policy enforcement
+|===
+
+Orchestration uses `selur-compose` with the `vordr` container runtime, `rokur` secrets management, and `cerro-torre` image signing. See `infra/selur-compose.yaml`.
+
+[source,bash]
+----
+# Build container images
+just container-build
+
+# Deploy with selur-compose
+just deploy-selur
+
+# Sign images with cerro-torre
+just sign-images
+----
 
 == Configuration Reference
 
@@ -264,7 +325,7 @@ Palimpsest-MPL License v1.0 (PMPL-1.0). See LICENSE file for details.
 == Credits
 
 * Concept by Jonathan D. A. Jewell (@hyperpolymath)
-* Built with Rust, Nickel, Nebula, and Podman
+* Built with Rust, Nickel, Nebula, Podman, and Chainguard
 
 ---
 

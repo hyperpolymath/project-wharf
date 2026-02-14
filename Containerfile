@@ -1,49 +1,42 @@
-# SPDX-License-Identifier: PMPL-1.0
-# SPDX-FileCopyrightText: 2025 hyperpolymath
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <jonathan.jewell@open.ac.uk>
 
-# Multi-stage Dockerfile for Project Wharf
+# Multi-stage Containerfile for Project Wharf
 # Builds both wharf-cli and yacht-agent binaries
+# Uses Chainguard images for minimal attack surface
 
-FROM rust:1.85-slim-bookworm AS builder
+# Builder stage — Wolfi-base with Rust toolchain
+FROM cgr.dev/chainguard/wolfi-base:latest AS builder
+
+RUN apk add --no-cache rust cargo pkgconf openssl-dev gcc musl-dev
 
 WORKDIR /build
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
 
 # Copy workspace files
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 COPY bin/ bin/
+# Dummy xtask for workspace resolution
+RUN mkdir -p xtask/src && echo 'fn main() {}' > xtask/src/main.rs
+COPY xtask/Cargo.toml xtask/Cargo.toml
 
 # Build release binaries
-RUN cargo build --release
+RUN cargo build --release --bin wharf --bin yacht-agent
 
 # Runtime image for wharf-cli
-FROM debian:bookworm-slim AS wharf-cli
-
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+FROM cgr.dev/chainguard/wolfi-base:latest AS wharf-cli
 
 COPY --from=builder /build/target/release/wharf /usr/local/bin/wharf
 
 ENTRYPOINT ["wharf"]
 CMD ["--help"]
 
-# Runtime image for yacht-agent
-FROM debian:bookworm-slim AS yacht-agent
+# Runtime image for yacht-agent (distroless — zero attack surface)
+FROM cgr.dev/chainguard/static:latest AS yacht-agent
 
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY --from=builder /build/target/release/yacht-agent /usr/local/bin/yacht-agent
+COPY --from=builder /build/target/release/yacht-agent /yacht-agent
 
 EXPOSE 3306 33060 9001
 
-ENTRYPOINT ["yacht-agent"]
+ENTRYPOINT ["/yacht-agent"]
 CMD ["--help"]

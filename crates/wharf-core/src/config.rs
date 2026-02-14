@@ -47,7 +47,7 @@ pub type ConfigResult<T> = Result<T, ConfigError>;
 // =============================================================================
 
 /// Configuration for the yacht-agent daemon
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct YachtAgentConfig {
     /// Logging configuration
@@ -61,17 +61,6 @@ pub struct YachtAgentConfig {
 
     /// Firewall configuration
     pub firewall: FirewallConfig,
-}
-
-impl Default for YachtAgentConfig {
-    fn default() -> Self {
-        Self {
-            logging: LoggingConfig::default(),
-            db_proxy: DbProxyConfig::default(),
-            api: ApiConfig::default(),
-            firewall: FirewallConfig::default(),
-        }
-    }
 }
 
 /// Logging configuration
@@ -183,7 +172,7 @@ impl Default for FirewallConfig {
 // =============================================================================
 
 /// Configuration for the wharf CLI tool
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WharfCliConfig {
     /// Logging configuration
@@ -200,18 +189,6 @@ pub struct WharfCliConfig {
 
     /// State management settings
     pub state: StateConfig,
-}
-
-impl Default for WharfCliConfig {
-    fn default() -> Self {
-        Self {
-            logging: LoggingConfig::default(),
-            paths: PathsConfig::default(),
-            build: BuildConfig::default(),
-            mooring: MooringConfig::default(),
-            state: StateConfig::default(),
-        }
-    }
 }
 
 /// Path configuration
@@ -285,6 +262,9 @@ pub struct MooringConfig {
 
     /// Default layers to sync
     pub layers: Vec<String>,
+
+    /// Fleet-wide default SSH identity file
+    pub ssh_identity: Option<String>,
 }
 
 impl Default for MooringConfig {
@@ -294,6 +274,7 @@ impl Default for MooringConfig {
             emergency: false,
             dry_run: false,
             layers: vec!["config".to_string(), "files".to_string()],
+            ssh_identity: None,
         }
     }
 }

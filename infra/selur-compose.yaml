@@ -1,0 +1,135 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <jonathan.jewell@open.ac.uk>
+#
+# selur-compose.yaml — Project Wharf Container Orchestration
+# ===========================================================
+# Uses vordr runtime, rokur secrets, cerro-torre image signing.
+# Deploy: selur-compose -f infra/selur-compose.yaml up -d
+
+version: "1.0"
+
+x-selur:
+  runtime: vordr
+  secrets-backend: rokur
+  signing: cerro-torre
+  attestations:
+    require-sbom: true
+    require-signature: true
+
+services:
+  web:
+    image: yacht-nginx:latest
+    build:
+      containerfile: infra/containers/Containerfile.nginx
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    volumes:
+      - web-root:/var/www/html:ro
+      - uploads:/var/www/html/wp-content/uploads:rw
+      - certs:/etc/letsencrypt:ro
+    depends_on:
+      - agent
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  agent:
+    image: yacht-agent:latest
+    build:
+      containerfile: infra/containers/Containerfile.agent
+    ports:
+      - "3306:3306"
+      - "9001:9001"
+    volumes:
+      - agent-config:/etc/wharf:ro
+      - integrity-db:/var/lib/wharf:rw
+    environment:
+      SHADOW_DB_HOST: db
+      SHADOW_DB_PORT: "33060"
+      DB_PROTOCOL: mysql
+      FIREWALL_MODE: nftables
+      METRICS_ENABLED: "true"
+    cap_add:
+      - NET_ADMIN
+      - BPF
+    read_only: true
+    healthcheck:
+      test: ["CMD-SHELL", "true"]  # TCP probe via orchestrator
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  db:
+    image: cgr.dev/chainguard/mariadb:latest
+    ports:
+      - "33060:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+    secrets:
+      - db-password
+      - db-root-password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  web-root:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/wharf/sites/default/html
+
+  uploads:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/wharf/sites/default/uploads
+
+  agent-config:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/wharf/config
+
+  integrity-db:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/wharf/integrity
+
+  certs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/wharf/certs
+
+  db-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/wharf/data/mysql
+
+secrets:
+  db-password:
+    provider: rokur
+    key: wharf/db/password
+
+  db-root-password:
+    provider: rokur
+    key: wharf/db/root-password

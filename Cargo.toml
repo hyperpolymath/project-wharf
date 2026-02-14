@@ -14,7 +14,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["Jonathan D. A. Jewell <hyperpolymath>"]
+authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
 license = "PMPL-1.0"
 repository = "https://gitlab.com/hyperpolymath/wharf"
 description = "The Sovereign Web Hypervisor - Immutable CMS Infrastructure"
@@ -37,9 +37,35 @@ sqlparser = "0.39"
 webauthn-rs = "0.4"
 
 # Cryptography
-ed25519-dalek = "2.0"
 blake3 = "1.5"
 argon2 = "0.5"
+
+# Post-Quantum Hybrid Signatures (FIPS 204 ML-DSA-87)
+pqcrypto-mldsa = "0.1"
+pqcrypto-traits = "0.3"
+
+# Ed448 Goldilocks Curve (classical component of hybrid)
+ed448-goldilocks = { version = "0.14.0-pre.10", features = ["signing"] }
+
+# SHAKE3/SHA3 (FIPS 202)
+sha3 = "0.10"
+
+# XChaCha20-Poly1305 symmetric encryption
+chacha20poly1305 = "0.10"
+
+# HKDF key derivation
+hkdf = "0.12"
+
+# ChaCha20-based CSPRNG
+rand_chacha = "0.3"
+rand_core = { version = "0.6", features = ["std"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Crypto utilities
+hex = "0.4"
+zeroize = { version = "1.7", features = ["derive"] }
 
 # Networking
 trust-dns-client = "0.23"

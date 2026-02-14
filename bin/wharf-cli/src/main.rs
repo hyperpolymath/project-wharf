@@ -17,7 +17,7 @@
 
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
-use tracing::{info, warn, Level};
+use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 mod ops;
@@ -596,11 +596,19 @@ async fn main() -> anyhow::Result<()> {
             let fleet_path = config_dir.join("fleet.json");
             let fleet = ops::fleet::load_fleet(&fleet_path)?;
 
+            // Load CLI config for mooring settings
+            let cli_config = wharf_core::config::ConfigLoader::new()
+                .load_wharf_cli_config()
+                .unwrap_or_default();
+
             // Build source directory path
             let source_dir = config_dir.join("site");
             if !source_dir.exists() {
                 anyhow::bail!("Source directory not found: {:?}. Create it with site files.", source_dir);
             }
+
+            // Load or generate hybrid keypair
+            let keypair = ops::moor::load_or_generate_keypair(&config_dir)?;
 
             // Execute mooring
             let options = ops::moor::MoorOptions {
@@ -610,16 +618,21 @@ async fn main() -> anyhow::Result<()> {
                 layers,
             };
 
-            match ops::moor::execute_moor(&fleet, &yacht, &source_dir, &options) {
+            match ops::moor::execute_moor(
+                &fleet, &yacht, &source_dir, &options, &keypair, &cli_config.mooring,
+            ).await {
                 Ok(result) => {
                     println!();
-                    println!("✓ Mooring complete!");
+                    println!("Mooring complete!");
                     println!("  Yacht: {}", result.yacht_name);
                     println!("  Files synced: {}", result.files_synced);
                     println!("  Integrity verified: {}", result.integrity_verified);
+                    if let Some(snap) = &result.snapshot_id {
+                        println!("  Snapshot: {}", snap);
+                    }
                 }
                 Err(e) => {
-                    eprintln!("✗ Mooring failed: {}", e);
+                    eprintln!("Mooring failed: {}", e);
                     std::process::exit(1);
                 }
             }

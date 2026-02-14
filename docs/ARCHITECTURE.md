@@ -46,41 +46,46 @@ capabilities are physically separated from runtime execution.
 
 ## Components
 
-### Wharf Controller
+### Wharf Controller (`bin/wharf-cli`)
 
 The offline administrative interface.
 
 **Location**: Your local machine or secure workstation
 
 **Components**:
-- `wharf-cli`: Command-line interface
+- `wharf-cli`: Command-line interface (Rust, clap)
+- `wharf-core`: Shared library — crypto, fleet, integrity, mooring, sync
+- `MooringClient`: HTTP client for the four-phase mooring protocol
 - Nickel schemas: Declarative configuration
 - Nebula CA: Certificate authority for mesh networking
 - FIDO2 keys: Hardware authentication
 
 **Responsibilities**:
-- Configuration authoring
+- Ed448 + ML-DSA-87 hybrid keypair management
+- Configuration authoring and validation
 - Certificate generation
-- State synchronization
-- Security auditing
+- State synchronization via mooring protocol
+- Security auditing and integrity manifests
 
-### Yacht Agent
+### Yacht Agent (`bin/yacht-agent`)
 
 The runtime enforcement agent.
 
 **Location**: Production server
 
 **Components**:
-- Database Proxy: SQL query filtering
-- Header Airlock: HTTP sanitization
+- Database Proxy: AST-based SQL query filtering (not regex)
+- Header Airlock: HTTP header sanitization
 - File Integrity Monitor: BLAKE3 verification
-- Mooring API: Secure sync endpoint
+- Mooring API: Secure sync endpoint (HTTP on port 9001)
+- eBPF XDP Firewall: Optional kernel-level packet filtering
 
 **Responsibilities**:
-- Policy enforcement
-- Query filtering
-- Header sanitization
-- Integrity verification
+- Hybrid signature verification on all mooring requests
+- Policy enforcement (database, filesystem, HTTP)
+- Query filtering by table zone (Blue/Red/Grey)
+- Header stripping and injection
+- Integrity verification and snapshot management
 
 ### Nebula Mesh
 
@@ -106,6 +111,67 @@ Zero-trust network overlay.
 └─────┘   └───────┘   └──────────┘
 ```
 
+## Cryptographic Architecture
+
+### Hybrid Signature Scheme
+
+All mooring operations use an Ed448 + ML-DSA-87 (Dilithium5) hybrid signature:
+
+```
+Message ──┬── Ed448 Sign ──────────── Ed448 Signature (114 bytes)
+          │
+          └── ML-DSA-87 Sign ──────── ML-DSA-87 Signature (4627 bytes)
+                                              │
+                                   HybridSignature { ed448_sig, mldsa87_sig }
+```
+
+**Verification**: Both signatures must verify independently. If either fails, the
+entire operation is rejected. This provides post-quantum safety — an attacker must
+break both Ed448 AND ML-DSA-87 to forge a signature.
+
+### Cryptographic Primitives
+
+| Layer | Algorithm | Usage |
+|-------|-----------|-------|
+| Signatures | Ed448 + ML-DSA-87 | Mooring init/commit, fleet attestation |
+| File Integrity | BLAKE3 | Filesystem manifests, content hashing |
+| Provenance | SHAKE3-512 | Long-term provenance hashing, KDF input |
+| Encryption | XChaCha20-Poly1305 | Secrets in transit (AEAD) |
+| Key Derivation | HKDF-SHAKE512 | Per-session key derivation |
+| Password | Argon2id (512 MiB) | Stored keypair protection (Wharf only) |
+| CSPRNG | ChaCha20-DRBG | All key generation and nonces |
+
+## Mooring Protocol
+
+The four-phase HTTP protocol for Wharf → Yacht state synchronization:
+
+```
+Phase 1: INIT
+  Wharf ──POST /mooring/init──▶ Yacht
+         { layers, force, dry_run, signature: HybridSignature }
+         ◀── { session_id, accepted_layers, yacht_pubkey }
+
+Phase 2: VERIFY (per layer)
+  Wharf ──POST /mooring/verify──▶ Yacht
+         { session_id, layer, manifest: BLAKE3[] }
+         ◀── { delta: [files needing sync] }
+
+Phase 3: RSYNC
+  Wharf ──SSH/rsync──▶ Yacht
+         (delta transfer with identity file from fleet config)
+
+Phase 4: COMMIT
+  Wharf ──POST /mooring/commit──▶ Yacht
+         { session_id, layers, signature: HybridSignature }
+         ◀── { snapshot_id, integrity_hash, yacht_signature }
+```
+
+**Identity File Resolution** (Phase 3 rsync):
+1. Per-yacht SSH key (`yacht.ssh_identity_file`)
+2. Fleet-wide default (`mooring_config.ssh_identity`)
+3. `~/.ssh/id_ed448`
+4. SSH agent (fallback)
+
 ## Data Flow
 
 ### Read Path (Public)
@@ -128,8 +194,8 @@ User → CDN → Nginx → PHP → Yacht Agent → Database
 
 ```
 Admin → FIDO2 → Wharf CLI → Nebula → Yacht Agent → Database
-                                          │
-                               (Policy Check: Signed by Wharf)
+                  │                        │
+            (Ed448+ML-DSA-87)    (Verify Hybrid Sig)
 ```
 
 ## Security Layers
@@ -281,6 +347,39 @@ Tested on: 4-core VM, 8GB RAM, SSD
 - Kernel vulnerabilities
 - Side-channel attacks
 - Social engineering
+
+## Container Architecture
+
+All container images use Chainguard bases (zero-CVE, SBOM provenance):
+
+| Container | Base Image | Purpose |
+|-----------|-----------|---------|
+| Builder | `cgr.dev/chainguard/wolfi-base:latest` | Compilation stage |
+| wharf-cli | `cgr.dev/chainguard/wolfi-base:latest` | Offline admin CLI |
+| yacht-agent | `cgr.dev/chainguard/static:latest` | Distroless runtime agent |
+| nginx | `cgr.dev/chainguard/nginx:latest` | Hardened web server |
+| php-fpm | `cgr.dev/chainguard/php:latest-fpm` | PHP runtime |
+| mariadb | `cgr.dev/chainguard/mariadb:latest` | Database |
+| openlitespeed | `litespeedtech/openlitespeed` | Exception: no Chainguard OLS image |
+
+### Container Toolchain
+
+| Tool | Purpose |
+|------|---------|
+| `selur-compose` | Orchestration (replaces docker-compose) |
+| `vordr` | Formally verified container runtime |
+| `rokur` | Secrets management |
+| `cerro-torre` | Image signing (Ed25519 + .ctp bundles) |
+| `selur seal` | Zero-copy IPC bridge |
+
+### Deployment
+
+```
+selur-compose -f infra/selur-compose.yaml up -d
+```
+
+The `selur-compose.yaml` defines: web (nginx), agent (yacht-agent), and db (mariadb)
+services with read-only filesystems, capability restrictions, and rokur-managed secrets.
 
 ## Related Documents
 

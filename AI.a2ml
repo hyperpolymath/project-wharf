@@ -2,14 +2,28 @@
 # AI Assistant Instructions
 
 ## Repository Focus
-- `project-wharf` is treated as a Rhodium Standard Repository; obey the Rhodium policies, maintain `.bot_directives`, and keep `.machines_readable/6scm/` authoritative.
+- `project-wharf` is the Sovereign Web Hypervisor — immutable CMS infrastructure.
+- This is a Rhodium Standard Repository; obey Rhodium policies, maintain `.bot_directives/`, and keep `.machine_readable/` authoritative.
 - Prefer to keep generated files out of source control, and regenerate them with the documented commands before committing.
 
+## Architecture
+- **Wharf** = Offline admin CLI (your machine) — crypto, fleet management, mooring, integrity
+- **Yacht** = Online runtime agent (the server) — HTTP API, DB proxy, firewall, eBPF
+- **Mooring** = Secure sync channel: init → verify → rsync → commit
+
 ## Workflow
-1. Inspect `.machines_readable/6scm/STATE.scm` for blockers and next actions.
-2. Respect any constraints listed inside `.machines_readable/6scm/AGENTIC.scm` when tooling changes are requested.
+1. Inspect `.machine_readable/STATE.scm` for blockers and next actions.
+2. Respect any constraints listed inside `.machine_readable/AGENTIC.scm` when tooling changes are requested.
 3. After finishing edits, update STATE with your outcomes and commit with a concise, imperative message.
+
+## Security Model
+- Ed448 + ML-DSA-87 hybrid signatures (post-quantum safe)
+- BLAKE3 file integrity, SHAKE3-512 provenance hashing
+- XChaCha20-Poly1305 AEAD, HKDF-SHA3-256 key derivation
+- Argon2id password hashing (512 MiB, 8 iter, 4 lanes — Wharf only)
+- AST-aware SQL proxy blocks injection at wire level
+- Fail-closed: if it can't verify, it blocks
 
 ## Delivery Promises
 - Mention in summaries whether STATE, `contractiles/`, or `.bot_directives/` changed.
-- Keep this file in sync with the repository’s status; update it if the governance changes.
+- Keep this file in sync with the repository's status; update it if the governance changes.

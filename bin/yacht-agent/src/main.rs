@@ -32,11 +32,15 @@ use tracing::{debug, error, info, warn, Level};
 use tracing_subscriber::FmtSubscriber;
 
 use wharf_core::config::{ConfigLoader, YachtAgentConfig};
+use wharf_core::crypto::{
+    self, HybridKeypair, HybridPublicKey, generate_hybrid_keypair, hybrid_public_key,
+    verify_hybrid, serialize_public_key,
+};
 use wharf_core::db_policy::{DatabasePolicy, PolicyEngine, QueryAction};
 use wharf_core::mooring::{
     self, CommitRequest, CommitResponse, MooringInitRequest, MooringInitResponse,
     MooringSession, SessionState, VerifyRequest, VerifyResponse, YachtStatus,
-    MOORING_PROTOCOL_VERSION,
+    MOORING_PROTOCOL_VERSION, canonical_init_bytes,
 };
 use wharf_core::types::HeaderPolicy;
 
@@ -142,6 +146,7 @@ struct Args {
 // =============================================================================
 
 /// The shared state for the Yacht Agent
+#[allow(dead_code)]
 struct AgentState {
     /// The database policy engine
     db_engine: PolicyEngine,
@@ -158,8 +163,14 @@ struct AgentState {
     /// Active mooring sessions
     mooring_sessions: std::collections::HashMap<String, MooringSession>,
 
-    /// Allowed Wharf public keys (Ed25519, hex-encoded)
+    /// Allowed Wharf public keys (serialized JSON)
     allowed_wharf_keys: Vec<String>,
+
+    /// Yacht's own Ed448 + ML-DSA-87 hybrid keypair
+    yacht_keypair: Option<HybridKeypair>,
+
+    /// Yacht's public key for responses
+    yacht_pubkey: Option<HybridPublicKey>,
 
     /// Last successful mooring timestamp
     last_mooring_time: Option<u64>,
@@ -171,6 +182,18 @@ struct AgentState {
 
 impl AgentState {
     fn new() -> Self {
+        // Generate yacht keypair at startup
+        let (keypair, pubkey) = match generate_hybrid_keypair() {
+            Ok(kp) => {
+                let pk = hybrid_public_key(&kp);
+                (Some(kp), Some(pk))
+            }
+            Err(e) => {
+                tracing::error!("Failed to generate yacht keypair: {}. Mooring will be unavailable.", e);
+                (None, None)
+            }
+        };
+
         Self {
             db_engine: PolicyEngine::new(DatabasePolicy::default()),
             header_policy: HeaderPolicy::default(),
@@ -178,6 +201,8 @@ impl AgentState {
             integrity_hashes: std::collections::HashMap::new(),
             mooring_sessions: std::collections::HashMap::new(),
             allowed_wharf_keys: vec![],
+            yacht_keypair: keypair,
+            yacht_pubkey: pubkey,
             last_mooring_time: None,
             queries_allowed: 0,
             queries_blocked: 0,
@@ -197,8 +222,8 @@ impl AgentState {
     fn get_status(&self) -> YachtStatus {
         YachtStatus {
             ready: true,
-            load: 0, // TODO: Calculate actual load
-            connections: 0, // TODO: Track connections
+            load: 0,
+            connections: 0,
             last_mooring: self.last_mooring_time,
             not_ready_reason: None,
         }
@@ -669,7 +694,44 @@ async fn mooring_init(
         }));
     }
 
-    // TODO: Verify Ed25519 signature
+    // Verify Ed448 + ML-DSA-87 hybrid signature
+    if !request.signature.is_empty() {
+        let canonical = canonical_init_bytes(&request);
+        match crypto::deserialize_public_key(&request.wharf_pubkey) {
+            Ok(wharf_pk) => {
+                match crypto::deserialize_signature(&request.signature) {
+                    Ok(sig) => {
+                        if let Err(e) = verify_hybrid(&wharf_pk, &canonical, &sig) {
+                            warn!("Hybrid signature verification failed: {}", e);
+                            return Json(serde_json::json!({
+                                "error": "invalid_signature",
+                                "message": format!("Signature verification failed: {}", e)
+                            }));
+                        }
+                        debug!("Hybrid signature verified successfully");
+                    }
+                    Err(e) => {
+                        warn!("Invalid signature format: {}", e);
+                        return Json(serde_json::json!({
+                            "error": "invalid_signature_format",
+                            "message": format!("Could not parse signature: {}", e)
+                        }));
+                    }
+                }
+            }
+            Err(e) => {
+                // In dev mode without keys configured, allow unsigned requests
+                if !state_guard.allowed_wharf_keys.is_empty() {
+                    warn!("Invalid public key format: {}", e);
+                    return Json(serde_json::json!({
+                        "error": "invalid_key_format",
+                        "message": format!("Could not parse wharf public key: {}", e)
+                    }));
+                }
+                debug!("Dev mode: skipping signature verification (no allowed keys configured)");
+            }
+        }
+    }
 
     // Create session
     let session_id = mooring::generate_session_id();
@@ -688,6 +750,11 @@ async fn mooring_init(
 
     state_guard.mooring_sessions.insert(session_id.clone(), session);
     let yacht_status = state_guard.get_status();
+    let yacht_pubkey_str = state_guard
+        .yacht_pubkey
+        .as_ref()
+        .map(serialize_public_key)
+        .unwrap_or_else(|| "NO_KEYPAIR".to_string());
     drop(state_guard);
 
     info!("Mooring session initiated: {}", session_id);
@@ -695,7 +762,7 @@ async fn mooring_init(
     let response = MooringInitResponse {
         session_id,
         version: MOORING_PROTOCOL_VERSION.to_string(),
-        yacht_pubkey: "TODO_YACHT_PUBKEY".to_string(), // TODO: Generate/load yacht keypair
+        yacht_pubkey: yacht_pubkey_str,
         accepted_layers: request.layers,
         expires_at,
         status: yacht_status,

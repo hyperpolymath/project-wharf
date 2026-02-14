@@ -7,7 +7,7 @@
 //!
 //! This crate provides:
 //! - SQL AST parsing for the database proxy ("Virtual Sharding")
-//! - Cryptographic utilities (Ed25519 signing, BLAKE3 hashing, Argon2id)
+//! - Cryptographic utilities (Ed448+ML-DSA-87 hybrid, SHAKE3-512, XChaCha20-Poly1305, BLAKE3)
 //! - File integrity verification (BLAKE3 manifests)
 //! - File synchronization (rsync over SSH)
 //! - Fleet configuration management
@@ -15,6 +15,7 @@
 //! - Common error types
 //! - Configuration loading (TOML/Nickel)
 //! - Mooring protocol for yacht synchronization
+//! - Mooring HTTP client for Wharf→Yacht communication
 
 pub mod config;
 pub mod crypto;
@@ -23,6 +24,7 @@ pub mod errors;
 pub mod fleet;
 pub mod integrity;
 pub mod mooring;
+pub mod mooring_client;
 pub mod sync;
 pub mod types;
 
