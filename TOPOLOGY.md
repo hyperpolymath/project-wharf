@@ -64,20 +64,24 @@
 | - mooring protocol     | `[██████████]` 100%         | Init/verify/commit/abort, canonical signing |
 | - mooring_client       | `[██████████]` 100%         | HTTP client with timeouts + pooling |
 | - fleet/sync/config    | `[██████████]` 100%         | Fleet TOML, rsync, config hierarchy |
-| **wharf-cli**          | `[█████████░]` 90%           | Near-complete |
+| **wharf-cli**          | `[█████████░]` 95%           | Near-complete |
 | - moor operations      | `[██████████]` 100%         | Full mooring flow, persistent keypairs |
 | - fleet management     | `[██████████]` 100%         | Add/remove/list yachts |
 | - integrity audit      | `[████████░░]` 80%          | Local + remote SSH, API mode pending |
-| **yacht-agent**        | `[█████████░]` 90%           | Near-complete |
+| - signature scheme     | `[██████████]` 100%         | MlDsa87Only (default) / Hybrid (opt-in) |
+| **yacht-agent**        | `[█████████░]` 95%           | Near-complete |
 | - DB proxy             | `[██████████]` 100%         | MySQL + PostgreSQL wire protocol |
 | - mooring API          | `[██████████]` 100%         | Init/verify/commit with sig verification |
 | - integrity verify     | `[██████████]` 100%         | BLAKE3 manifest verification wired |
 | - firewall (nftables)  | `[██████████]` 100%         | Rule generation, validation, runtime updates |
 | - metrics/stats        | `[██████████]` 100%         | Prometheus + JSON with real counters |
 | - keypair persistence  | `[██████████]` 100%         | /etc/wharf/keys/yacht.key |
+| - signature scheme     | `[██████████]` 100%         | CLI flag --signature-scheme, config support |
 | **wharf-ebpf**         | `[████████░░]` 80%           | XDP program + loader, needs production testing |
 | **nebula.rs**          | `[██████████]` 100%          | CA, cert signing, IP allocation, revocation |
-| **Overall**            | `[█████████░]` 90%           | ed448 audit pending |
+| **wordpress-adapter**  | `[██████████]` 100%          | GPL-2.0 dashboard widget + admin bar indicator |
+| **deployment**         | `[██████████]` 100%          | setup.sh, DEPLOY.adoc, systemd unit, selur-compose |
+| **Overall**            | `[█████████░]` 95%           | ed448 audit pending, otherwise shipping |
 
 ## Key Dependencies
 

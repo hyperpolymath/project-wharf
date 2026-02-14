@@ -228,6 +228,30 @@ cp adapters/wordpress/db.php /var/www/html/wp-content/db.php
 echo "include_once '/opt/wharf/adapters/drupal/settings.php';" >> sites/default/settings.php
 ----
 
+=== WordPress Dashboard Adapter
+
+A thin GPL-2.0 plugin that displays Wharf protection status in wp-admin:
+
+[source,bash]
+----
+# Copy the adapter plugin into your WordPress plugins directory
+cp -r adapters/wordpress-wharf /var/www/html/wp-content/plugins/wharf-adapter
+----
+
+Features:
+
+* Dashboard widget showing query stats (allowed/blocked), firewall mode, signature scheme
+* Admin bar indicator (green = protected, grey = agent unreachable)
+* 30-second response caching via WordPress transients
+* Zero security logic — all enforcement handled by yacht-agent
+
+Configure the agent URL in `wp-config.php` if non-default:
+
+[source,php]
+----
+define('WHARF_AGENT_URL', 'http://agent:9001');
+----
+
 === Others
 
 * Joomla (adapter included)
@@ -235,6 +259,26 @@ echo "include_once '/opt/wharf/adapters/drupal/settings.php';" >> sites/default/
 * Generic LAMP (customizable adapter)
 
 == Security Model
+
+=== Signature Scheme Configuration
+
+Wharf supports two signature modes, selectable at startup:
+
+|===
+| Scheme | Flag | Description
+
+| *ML-DSA-87 Only* (default) | `--signature-scheme ml-dsa-87-only` | FIPS 204 post-quantum only. Production-safe, peer-reviewed.
+| *Hybrid* | `--signature-scheme hybrid` | Ed448 + ML-DSA-87 dual signatures. Requires ed448-goldilocks audit.
+|===
+
+Set in TOML config (`yacht-agent.toml` or `wharf-cli.toml`):
+
+[source,toml]
+----
+signature_scheme = "ml-dsa-87-only"  # or "hybrid"
+----
+
+The default (`ml-dsa-87-only`) is recommended for production until the ed448-goldilocks library completes its third-party audit.
 
 === Cryptographic Primitives
 
@@ -352,6 +396,21 @@ just gen-yacht-cert    # Generate Yacht certificate
 just gen-email-records # Generate SPF/DKIM/DMARC
 just deploy-yacht      # Deploy agent to server
 ----
+
+== Deployment
+
+See link:deploy/DEPLOY.adoc[Deployment Guide] for a 5-minute quick start with Podman.
+
+[source,bash]
+----
+cd deploy && sudo ./setup.sh --domain example.com
+sudo podman compose -f ../infra/selur-compose.yaml up -d
+curl http://localhost:9001/health
+----
+
+== Security Challenge
+
+**Think you can break it?** See link:docs/HACK-ME-CHALLENGE.adoc[Hack This WordPress Site] — a fully documented challenge for security researchers to test the Wharf architecture.
 
 == Contributing
 

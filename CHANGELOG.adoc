@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive Justfile with 50+ recipes
 - RSR (Rhodium Standard Repository) compliance documentation
 
+=== V1.0 Shipping Preparation (2026-02-14)
+- *Signature scheme feature flag*: Ed448 now opt-in via `SignatureScheme::Hybrid`; default is `MlDsa87Only` (FIPS 204 peer-reviewed). Configurable via `--signature-scheme` CLI arg and TOML config.
+- *SQL injection smoke tests*: 19 integration tests proving AST-based proxy blocks real WordPress attack patterns (user creation, options manipulation, content defacement, DDL, stacked injection)
+- *Deployment package*: `deploy/setup.sh` first-run script + `deploy/DEPLOY.adoc` step-by-step guide with podman/selur-compose orchestration
+- *Hack-me challenge*: `docs/HACK-ME-CHALLENGE.adoc` with rules of engagement, attack surface table, and technical details for security researchers
+- *WordPress adapter plugin*: `adapters/wordpress-wharf/` — GPL-2.0-or-later PHP plugin providing dashboard widget (query stats, firewall mode, signature scheme) and admin bar indicator
+- *systemd unit*: `infra/systemd/yacht-agent.service` with DynamicUser, ProtectSystem=strict, MemoryDenyWriteExecute, and CAP_BPF
+- *Tooling enrollment*: Bot directives for gitbot-fleet (8 bots), panic-attacker security scan workflow, AI manifest updated
+- *K9 contractiles*: Nickel configuration templates (Kennel/Yard/Hunt levels) for deployment automation
+
 === Production Hardening (2026-02-14)
 - *Persistent hybrid keypairs*: Wharf CLI (`~/.wharf/keys/wharf.key`) and Yacht Agent (`/etc/wharf/keys/yacht.key`) now persist Ed448 + ML-DSA-87 keypairs across restarts with proper file permissions (0600 private, 0644 public)
 - *Keypair serialization*: Custom binary format with `WHRF` magic, versioning, and optional password encryption via HKDF-SHAKE512 + XChaCha20-Poly1305
@@ -61,7 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | 2026-02-14 | Production hardening: persistent keypairs, eBPF, metrics, integrity verification |
+| Unreleased | 2026-02-14 | V1.0 shipping: signature scheme flag, SQLi tests, deployment package, WordPress adapter, hack-me challenge |
 | 0.1.0 | 2025-11-26 | Initial release |
 
 == Upgrade Guide

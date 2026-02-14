@@ -14,4 +14,6 @@
     (project "panic-attacker" (relationship quality-tool) (description "Security scanning for weak points"))
     (project "echidna" (relationship quality-tool) (description "Formal proofing and fuzzing"))
     (project "hypatia" (relationship ci-cd-tool) (description "Neurosymbolic CI/CD security intelligence"))
-    (project "gitbot-fleet" (relationship automation) (description "Bot orchestration: rhodibot, echidnabot, sustainabot, glambot, seambot, finishbot"))))
+    (project "gitbot-fleet" (relationship automation) (description "Bot orchestration: rhodibot, echidnabot, sustainabot, glambot, seambot, finishbot"))
+    (project "verisimdb-data" (relationship quality-data) (description "Security scan data ingestion for weak point tracking"))
+    (project "wordpress" (relationship adapter-target) (description "Primary CMS adapter — GPL-2.0 dashboard plugin in adapters/wordpress-wharf/"))))
