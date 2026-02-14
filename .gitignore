@@ -49,7 +49,7 @@ __pycache__/
 # Ada/SPARK
 *.ali
 /obj/
-/bin/
+# /bin/ — NOT ignored: contains wharf-cli and yacht-agent source crates
 
 # Haskell
 /.stack-work/
@@ -77,3 +77,8 @@ htmlcov/
 /tmp/
 *.tmp
 *.bak
+
+# AI/Sync artifacts
+ai-cli-crash-capture/
+.directory
+sync_report*.txt

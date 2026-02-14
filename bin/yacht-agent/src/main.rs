@@ -471,23 +471,10 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // Build the API router
-    let api_state = state.clone();
-    let mut app = Router::new()
-        .route("/health", get(health_check))
-        .route("/status", get(status))
-        .route("/stats", get(stats))
-        // Mooring protocol endpoints
-        .route("/mooring/init", post(mooring_init))
-        .route("/mooring/verify", post(mooring_verify))
-        .route("/mooring/commit", post(mooring_commit));
-
-    // Add metrics endpoint if enabled
+    let app = build_api_router(state.clone(), args.metrics_enabled);
     if args.metrics_enabled {
-        app = app.route("/metrics", get(prometheus_metrics));
         info!("Prometheus metrics enabled at /metrics");
     }
-
-    let app = app.with_state(api_state);
 
     // Bind API to localhost only (Nebula mesh provides external access)
     let api_addr = SocketAddr::from(([0, 0, 0, 0], args.api_port));
@@ -497,6 +484,29 @@ async fn main() -> anyhow::Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+// =============================================================================
+// ROUTER CONSTRUCTION
+// =============================================================================
+
+/// Build the API router for the yacht-agent.
+///
+/// Extracted for testability — the integration tests call this directly.
+fn build_api_router(state: SharedState, metrics_enabled: bool) -> Router {
+    let mut app = Router::new()
+        .route("/health", get(health_check))
+        .route("/status", get(status))
+        .route("/stats", get(stats))
+        .route("/mooring/init", post(mooring_init))
+        .route("/mooring/verify", post(mooring_verify))
+        .route("/mooring/commit", post(mooring_commit));
+
+    if metrics_enabled {
+        app = app.route("/metrics", get(prometheus_metrics));
+    }
+
+    app.with_state(state)
 }
 
 // =============================================================================
@@ -1297,5 +1307,177 @@ async fn setup_nftables_firewall() -> Option<NftablesManager> {
             warn!("Alternatively, use eBPF mode with CAP_BPF capability");
             None
         }
+    }
+}
+
+// =============================================================================
+// INTEGRATION TESTS
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use wharf_core::mooring::{LayerManifest, MooringLayer};
+    use wharf_core::mooring_client::MooringClient;
+
+    /// End-to-end test of the full mooring protocol flow:
+    /// init → verify → commit over real HTTP.
+    #[tokio::test]
+    async fn test_mooring_e2e_flow() {
+        // Build the yacht-agent API on a random port
+        let state = Arc::new(RwLock::new(AgentState::new(None)));
+        let app = build_api_router(state.clone(), true);
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("Failed to bind test listener");
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        // Give the server a moment to start
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // Create a MooringClient with a fresh keypair
+        let keypair = generate_hybrid_keypair().expect("keypair gen");
+        let client = MooringClient::new(&format!("http://{}", addr), keypair);
+
+        // Step 1: Init mooring session
+        let layers = vec![MooringLayer::Config, MooringLayer::Files];
+        let init_resp = client
+            .init_session(layers, false, false)
+            .await
+            .expect("init_session failed");
+
+        assert!(!init_resp.session_id.is_empty(), "session_id should not be empty");
+        assert_eq!(init_resp.accepted_layers.len(), 2);
+        assert!(init_resp.expires_at > 0);
+
+        // Step 2: Verify a layer
+        let manifest = LayerManifest {
+            files: HashMap::from([
+                ("index.html".to_string(), "abc123".to_string()),
+                ("style.css".to_string(), "def456".to_string()),
+            ]),
+            total_size: 2048,
+            file_count: 2,
+            root_hash: "root000".to_string(),
+        };
+
+        let verify_resp = client
+            .verify_layer(&init_resp.session_id, MooringLayer::Config, manifest)
+            .await
+            .expect("verify_layer failed");
+
+        // Without site_root configured, verification passes (dev mode)
+        assert!(verify_resp.verified);
+        assert_eq!(verify_resp.matched_files, 2);
+
+        // Step 3: Commit
+        let commit_resp = client
+            .commit(&init_resp.session_id, init_resp.accepted_layers)
+            .await
+            .expect("commit failed");
+
+        assert!(commit_resp.success);
+        assert!(commit_resp.snapshot_id.is_some());
+
+        // Verify state was updated
+        let s = state.read().await;
+        assert!(s.moored);
+        assert!(s.last_mooring_time.is_some());
+        assert_eq!(s.mooring_session_count, 1);
+    }
+
+    /// Test that the health endpoint responds
+    #[tokio::test]
+    async fn test_health_endpoint() {
+        let state = Arc::new(RwLock::new(AgentState::new(None)));
+        let app = build_api_router(state, false);
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let resp = reqwest::get(format!("http://{}/health", addr))
+            .await
+            .expect("health request failed");
+
+        assert!(resp.status().is_success());
+        assert_eq!(resp.text().await.unwrap(), "OK");
+    }
+
+    /// Test that metrics endpoint returns real counters
+    #[tokio::test]
+    async fn test_metrics_endpoint() {
+        let state = Arc::new(RwLock::new(AgentState::new(None)));
+        {
+            let mut s = state.write().await;
+            s.queries_allowed = 42;
+            s.queries_blocked = 3;
+        }
+        let app = build_api_router(state, true);
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let resp = reqwest::get(format!("http://{}/metrics", addr))
+            .await
+            .expect("metrics request failed");
+
+        let body = resp.text().await.unwrap();
+        assert!(body.contains("yacht_queries_total{status=\"allowed\"} 42"));
+        assert!(body.contains("yacht_queries_total{status=\"blocked\"} 3"));
+    }
+
+    /// Test that stats endpoint returns real counters
+    #[tokio::test]
+    async fn test_stats_endpoint() {
+        let state = Arc::new(RwLock::new(AgentState::new(None)));
+        {
+            let mut s = state.write().await;
+            s.queries_allowed = 10;
+            s.queries_blocked = 5;
+            s.queries_audited = 2;
+        }
+        let app = build_api_router(state, false);
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let resp = reqwest::get(format!("http://{}/stats", addr))
+            .await
+            .expect("stats request failed");
+
+        let body: serde_json::Value = resp.json().await.unwrap();
+        assert_eq!(body["queries"]["allowed"], 10);
+        assert_eq!(body["queries"]["blocked"], 5);
+        assert_eq!(body["queries"]["audited"], 2);
     }
 }

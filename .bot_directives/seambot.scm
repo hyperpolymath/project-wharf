@@ -4,4 +4,4 @@
   (scope "integration health")
   (allow ("analysis" "contract checks" "docs updates"))
   (deny ("code changes without approval"))
-  (notes "May add integration test suggestions"))
+  (notes "Verify mooring protocol contracts and inter-crate API consistency"))

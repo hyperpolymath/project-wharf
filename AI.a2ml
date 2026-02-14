@@ -24,6 +24,14 @@
 - AST-aware SQL proxy blocks injection at wire level
 - Fail-closed: if it can't verify, it blocks
 
+## Integration
+
+- **panic-attack**: Weekly security scan via `.github/workflows/security-scan.yml`
+- **hypatia**: Neurosymbolic CI/CD via `.github/workflows/hypatia-scan.yml`
+- **gitbot-fleet**: Bot directives in `.bot_directives/` (8 bots enrolled)
+- **verisimdb-data**: Scan results ingested via repository_dispatch
+- **echidna**: Formal verification via echidnabot directive
+
 ## Delivery Promises
 - Mention in summaries whether STATE, `contractiles/`, or `.bot_directives/` changed.
 - Keep this file in sync with the repository's status; update it if the governance changes.

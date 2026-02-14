@@ -3176,6 +3176,7 @@ dependencies = [
  "clap",
  "hyper",
  "notify",
+ "reqwest",
  "serde",
  "serde_json",
  "sqlparser",

@@ -104,7 +104,7 @@ impl MooringClient {
         let body: serde_json::Value = resp.json().await?;
 
         // Check for error response
-        if let Some(error) = body.get("error") {
+        if let Some(error) = body.get("error").filter(|v| !v.is_null()) {
             return Err(MooringClientError::YachtError(
                 error.as_str().unwrap_or("unknown error").to_string(),
             ));
@@ -145,7 +145,7 @@ impl MooringClient {
 
         let body: serde_json::Value = resp.json().await?;
 
-        if let Some(error) = body.get("error") {
+        if let Some(error) = body.get("error").filter(|v| !v.is_null()) {
             return Err(MooringClientError::YachtError(
                 error.as_str().unwrap_or("unknown error").to_string(),
             ));
@@ -184,7 +184,7 @@ impl MooringClient {
 
         let body: serde_json::Value = resp.json().await?;
 
-        if let Some(error) = body.get("error") {
+        if let Some(error) = body.get("error").filter(|v| !v.is_null()) {
             return Err(MooringClientError::YachtError(
                 error.as_str().unwrap_or("unknown error").to_string(),
             ));
@@ -223,7 +223,7 @@ impl MooringClient {
 
         let body: serde_json::Value = resp.json().await?;
 
-        if let Some(error) = body.get("error") {
+        if let Some(error) = body.get("error").filter(|v| !v.is_null()) {
             return Err(MooringClientError::YachtError(
                 error.as_str().unwrap_or("unknown error").to_string(),
             ));
