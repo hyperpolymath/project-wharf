@@ -95,10 +95,31 @@ pub struct HybridPublicKey {
 /// Hybrid signature (both must verify)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HybridSignature {
-    /// Ed448 signature (114 bytes)
+    /// Ed448 signature (114 bytes) — empty when scheme is MlDsa87Only
+    #[serde(default)]
     pub ed448_sig: Vec<u8>,
     /// ML-DSA-87 detached signature
     pub mldsa87_sig: Vec<u8>,
+}
+
+/// Signature scheme selection for v1.0 shipping flexibility.
+///
+/// Default is `MlDsa87Only` — the Ed448 implementation (ed448-goldilocks 0.14.0-pre.10)
+/// is unaudited and should not be used in production until a third-party audit completes.
+/// ML-DSA-87 alone is the FIPS 204 reference implementation and is peer-reviewed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SignatureScheme {
+    /// Post-quantum only (ML-DSA-87). Safe for production. DEFAULT.
+    MlDsa87Only,
+    /// Classical + post-quantum hybrid (Ed448 + ML-DSA-87). Requires ed448 audit.
+    Hybrid,
+}
+
+impl Default for SignatureScheme {
+    fn default() -> Self {
+        SignatureScheme::MlDsa87Only
+    }
 }
 
 // =============================================================================
@@ -367,6 +388,53 @@ pub fn sign_hybrid(keypair: &HybridKeypair, message: &[u8]) -> HybridSignature {
     HybridSignature {
         ed448_sig: ed448_sig_bytes,
         mldsa87_sig: mldsa87_sig_bytes,
+    }
+}
+
+/// Sign a message using the specified scheme
+///
+/// With `MlDsa87Only`, the Ed448 signature field is left empty.
+/// With `Hybrid`, both signatures are produced (same as `sign_hybrid`).
+pub fn sign_with_scheme(
+    keypair: &HybridKeypair,
+    message: &[u8],
+    scheme: SignatureScheme,
+) -> HybridSignature {
+    match scheme {
+        SignatureScheme::MlDsa87Only => {
+            let mldsa87_sig = mldsa87::detached_sign(message, &keypair.mldsa87_sk);
+            let mldsa87_sig_bytes =
+                pqcrypto_traits::sign::DetachedSignature::as_bytes(&mldsa87_sig).to_vec();
+            HybridSignature {
+                ed448_sig: Vec::new(),
+                mldsa87_sig: mldsa87_sig_bytes,
+            }
+        }
+        SignatureScheme::Hybrid => sign_hybrid(keypair, message),
+    }
+}
+
+/// Verify a signature using the specified scheme
+///
+/// With `MlDsa87Only`, only the ML-DSA-87 signature is checked.
+/// With `Hybrid`, both Ed448 AND ML-DSA-87 must pass.
+pub fn verify_with_scheme(
+    pubkey: &HybridPublicKey,
+    message: &[u8],
+    sig: &HybridSignature,
+    scheme: SignatureScheme,
+) -> Result<(), CryptoError> {
+    match scheme {
+        SignatureScheme::MlDsa87Only => {
+            let mldsa_pk = mldsa87::PublicKey::from_bytes(&pubkey.mldsa87)
+                .map_err(|_| CryptoError::InvalidKeyFormat("Invalid ML-DSA-87 public key".to_string()))?;
+            let mldsa_sig = mldsa87::DetachedSignature::from_bytes(&sig.mldsa87_sig)
+                .map_err(|_| CryptoError::InvalidKeyFormat("Invalid ML-DSA-87 signature".to_string()))?;
+            mldsa87::verify_detached_signature(&mldsa_sig, message, &mldsa_pk)
+                .map_err(|_| CryptoError::MlDsa87VerificationFailed)?;
+            Ok(())
+        }
+        SignatureScheme::Hybrid => verify_hybrid(pubkey, message, sig),
     }
 }
 
@@ -778,6 +846,48 @@ mod tests {
 
         // Wrong password should fail decryption
         assert!(deserialize_keypair(&encrypted, b"wrong").is_err());
+    }
+
+    #[test]
+    fn test_mldsa87_only_sign_verify() {
+        let keypair = generate_hybrid_keypair().unwrap();
+        let pubkey = hybrid_public_key(&keypair);
+        let msg = b"mldsa87-only test message";
+
+        let sig = sign_with_scheme(&keypair, msg, SignatureScheme::MlDsa87Only);
+        // Ed448 sig should be empty in MlDsa87Only mode
+        assert!(sig.ed448_sig.is_empty());
+        assert!(!sig.mldsa87_sig.is_empty());
+
+        // Verification with same scheme should succeed
+        verify_with_scheme(&pubkey, msg, &sig, SignatureScheme::MlDsa87Only).unwrap();
+    }
+
+    #[test]
+    fn test_mldsa87_only_wrong_message() {
+        let keypair = generate_hybrid_keypair().unwrap();
+        let pubkey = hybrid_public_key(&keypair);
+        let sig = sign_with_scheme(&keypair, b"original", SignatureScheme::MlDsa87Only);
+        assert!(verify_with_scheme(&pubkey, b"tampered", &sig, SignatureScheme::MlDsa87Only).is_err());
+    }
+
+    #[test]
+    fn test_hybrid_scheme_sign_verify() {
+        let keypair = generate_hybrid_keypair().unwrap();
+        let pubkey = hybrid_public_key(&keypair);
+        let msg = b"hybrid scheme test";
+
+        let sig = sign_with_scheme(&keypair, msg, SignatureScheme::Hybrid);
+        // Both signatures should be present
+        assert!(!sig.ed448_sig.is_empty());
+        assert!(!sig.mldsa87_sig.is_empty());
+
+        verify_with_scheme(&pubkey, msg, &sig, SignatureScheme::Hybrid).unwrap();
+    }
+
+    #[test]
+    fn test_scheme_default_is_mldsa87_only() {
+        assert_eq!(SignatureScheme::default(), SignatureScheme::MlDsa87Only);
     }
 
     #[test]

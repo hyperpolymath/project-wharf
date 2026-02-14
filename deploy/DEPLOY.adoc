@@ -1,0 +1,97 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+= Project Wharf — Deployment Guide
+:toc: left
+:icons: font
+
+== Prerequisites
+
+* A Linux server (Debian 12+, Ubuntu 22.04+, Fedora 38+, or any distro with podman)
+* `podman` or `docker` installed
+* At least 2 GB RAM, 10 GB disk
+* Ports 8080, 8443, 9001 available
+
+== Quick Start (5 minutes)
+
+[source,bash]
+----
+# Clone the repo
+git clone https://github.com/hyperpolymath/project-wharf.git
+cd project-wharf/deploy
+
+# Run the setup script
+sudo ./setup.sh --domain example.com
+
+# Start the stack
+sudo podman compose -f ../infra/selur-compose.yaml up -d
+
+# Verify
+curl http://localhost:9001/health
+# → {"status":"ok","moored":false,...}
+----
+
+== What Gets Deployed
+
+[cols="1,2,1"]
+|===
+| Service | Purpose | Port
+
+| `yacht-agent` | Security enforcer (DB proxy, integrity, mooring API) | 3306, 9001
+| `yacht-nginx` | Reverse proxy (TLS termination, static files) | 8080, 8443
+| `mariadb` | Database (shadowed behind yacht-agent proxy) | 33060 (internal)
+|===
+
+== Architecture
+
+[source,text]
+----
+Internet → nginx:8080/8443 → PHP-FPM → yacht-agent:3306 → MariaDB:33060
+                                              ↑
+                                     AST-aware SQL filter
+                                     (blocks injection)
+----
+
+WordPress connects to the database on port 3306, which is the yacht-agent's proxy.
+The agent parses every SQL statement's AST and enforces table-level write policies.
+
+== Managing Your Site
+
+=== From Your Local Machine (The Wharf)
+
+[source,bash]
+----
+# Install the wharf CLI
+cargo install --path bin/wharf-cli
+
+# Initialize your fleet
+wharf init --adapter wordpress
+
+# Push changes to the yacht
+wharf moor example.com
+
+# Verify remote integrity
+wharf integrity verify --remote example.com
+----
+
+=== On the Server (The Yacht)
+
+[source,bash]
+----
+# Check agent status
+curl http://localhost:9001/stats
+
+# View metrics (Prometheus format)
+curl http://localhost:9001/metrics
+
+# Check health
+curl http://localhost:9001/health
+----
+
+== Security Notes
+
+* The default signature scheme is `ml-dsa-87-only` (FIPS 204, post-quantum safe)
+* To enable hybrid Ed448+ML-DSA-87 signatures (not yet audited):
+  set `signature_scheme = "hybrid"` in `yacht-agent.toml`
+* WordPress is configured with `DISALLOW_FILE_EDIT` and `DISALLOW_FILE_MODS`
+* All code changes go through the mooring protocol (cryptographically signed)
+* The database proxy blocks writes to `wp_users`, `wp_options`, `wp_posts` tables
+* `DROP TABLE` and `ALTER TABLE` are always blocked regardless of table

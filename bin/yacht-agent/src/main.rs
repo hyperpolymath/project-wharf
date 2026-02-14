@@ -34,7 +34,7 @@ use tracing_subscriber::FmtSubscriber;
 use wharf_core::config::{ConfigLoader, YachtAgentConfig};
 use wharf_core::crypto::{
     self, HybridKeypair, HybridPublicKey, generate_hybrid_keypair, hybrid_public_key,
-    verify_hybrid, serialize_public_key,
+    verify_with_scheme, serialize_public_key, SignatureScheme,
     serialize_keypair_raw, deserialize_keypair_raw,
 };
 use wharf_core::db_policy::{DatabasePolicy, PolicyEngine, QueryAction};
@@ -137,6 +137,10 @@ struct Args {
     #[arg(long, default_value_t = true, env = "METRICS_ENABLED")]
     metrics_enabled: bool,
 
+    /// Signature scheme: ml-dsa-87-only (default, production-safe) or hybrid (requires ed448 audit)
+    #[arg(long, default_value = "ml-dsa-87-only", env = "SIGNATURE_SCHEME")]
+    signature_scheme: String,
+
     /// Enable verbose logging
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
@@ -179,6 +183,9 @@ struct AgentState {
     /// Site root for integrity verification
     site_root: Option<String>,
 
+    /// Signature scheme for mooring verification
+    signature_scheme: SignatureScheme,
+
     /// Statistics
     queries_allowed: u64,
     queries_blocked: u64,
@@ -188,7 +195,7 @@ struct AgentState {
 }
 
 impl AgentState {
-    fn new(key_store_dir: Option<&str>) -> Self {
+    fn new(key_store_dir: Option<&str>, signature_scheme: SignatureScheme) -> Self {
         // Load or generate yacht keypair with persistence
         let (keypair, pubkey) = Self::load_or_generate_keypair(key_store_dir);
 
@@ -203,6 +210,7 @@ impl AgentState {
             yacht_pubkey: pubkey,
             last_mooring_time: None,
             site_root: None,
+            signature_scheme,
             queries_allowed: 0,
             queries_blocked: 0,
             queries_audited: 0,
@@ -453,8 +461,15 @@ async fn main() -> anyhow::Result<()> {
         error!("WARNING: No firewall protection active!");
     }
 
+    // Parse signature scheme from CLI arg
+    let signature_scheme = match args.signature_scheme.as_str() {
+        "hybrid" => SignatureScheme::Hybrid,
+        _ => SignatureScheme::MlDsa87Only,
+    };
+    info!("Signature scheme: {:?}", signature_scheme);
+
     // Initialize shared state with persistent keypair
-    let mut agent_state = AgentState::new(config.key_store_dir.as_deref());
+    let mut agent_state = AgentState::new(config.key_store_dir.as_deref(), signature_scheme);
     agent_state.site_root = config.site_root.clone();
     let state = Arc::new(RwLock::new(agent_state));
 
@@ -793,8 +808,8 @@ async fn mooring_init(
             Ok(wharf_pk) => {
                 match crypto::deserialize_signature(&request.signature) {
                     Ok(sig) => {
-                        if let Err(e) = verify_hybrid(&wharf_pk, &canonical, &sig) {
-                            warn!("Hybrid signature verification failed: {}", e);
+                        if let Err(e) = verify_with_scheme(&wharf_pk, &canonical, &sig, state_guard.signature_scheme) {
+                            warn!("Signature verification failed: {}", e);
                             return Json(serde_json::json!({
                                 "error": "invalid_signature",
                                 "message": format!("Signature verification failed: {}", e)
@@ -1326,7 +1341,7 @@ mod tests {
     #[tokio::test]
     async fn test_mooring_e2e_flow() {
         // Build the yacht-agent API on a random port
-        let state = Arc::new(RwLock::new(AgentState::new(None)));
+        let state = Arc::new(RwLock::new(AgentState::new(None, SignatureScheme::default())));
         let app = build_api_router(state.clone(), true);
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -1395,7 +1410,7 @@ mod tests {
     /// Test that the health endpoint responds
     #[tokio::test]
     async fn test_health_endpoint() {
-        let state = Arc::new(RwLock::new(AgentState::new(None)));
+        let state = Arc::new(RwLock::new(AgentState::new(None, SignatureScheme::default())));
         let app = build_api_router(state, false);
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -1420,7 +1435,7 @@ mod tests {
     /// Test that metrics endpoint returns real counters
     #[tokio::test]
     async fn test_metrics_endpoint() {
-        let state = Arc::new(RwLock::new(AgentState::new(None)));
+        let state = Arc::new(RwLock::new(AgentState::new(None, SignatureScheme::default())));
         {
             let mut s = state.write().await;
             s.queries_allowed = 42;
@@ -1451,7 +1466,7 @@ mod tests {
     /// Test that stats endpoint returns real counters
     #[tokio::test]
     async fn test_stats_endpoint() {
-        let state = Arc::new(RwLock::new(AgentState::new(None)));
+        let state = Arc::new(RwLock::new(AgentState::new(None, SignatureScheme::default())));
         {
             let mut s = state.write().await;
             s.queries_allowed = 10;

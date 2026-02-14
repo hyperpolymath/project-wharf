@@ -1,0 +1,135 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+= Hack This WordPress Site
+:toc: left
+:icons: font
+
+== The Challenge
+
+We've deployed a standard WordPress installation protected by Project Wharf.
+
+**Your goal:** Compromise the site. Deface content. Escalate privileges. Exfiltrate data. Anything that demonstrates a security failure in the Wharf architecture.
+
+**What makes this interesting:** The security layer is _outside_ WordPress. It's a separate Rust process that proxies all database queries through an AST parser and monitors all file changes via BLAKE3 integrity manifests. There is no admin panel on the live server. All writes go through a cryptographically signed mooring protocol.
+
+== Target
+
+[horizontal]
+URL:: `https://hack-me.wharf.example.com` _(will be published when live)_
+Architecture:: WordPress 6.x + yacht-agent (Wharf)
+OS:: Chainguard distroless (no shell, no libc in production container)
+Database:: MariaDB (behind AST-aware proxy)
+Crypto:: ML-DSA-87 (FIPS 204 post-quantum) signatures on all control plane operations
+
+== What's Protected
+
+|===
+| Attack Vector | Protection | How It Works
+
+| SQL Injection | AST-aware database proxy | Parses SQL into an AST (sqlparser). No regex. Blocks writes to `wp_users`, `wp_options`, `wp_posts`. `DROP`/`ALTER` always blocked.
+| File Upload Backdoors | BLAKE3 integrity manifests | Yacht-agent maintains a hash manifest of every file. New or modified files trigger alerts and can be auto-reverted.
+| Admin Panel Bruteforce | No admin panel | `wp-admin` is served read-only. `DISALLOW_FILE_EDIT` and `DISALLOW_FILE_MODS` are set. The mooring protocol is the only way to make changes.
+| Plugin Supply Chain | Cryptographic mooring | Plugins can only be installed via `wharf moor`, which requires a valid ML-DSA-87 signature from a registered keypair.
+| Privilege Escalation | Immutable user table | `INSERT`/`UPDATE`/`DELETE` on `wp_users` are blocked at the proxy level.
+| Stacked Queries | AST parser rejects | Multiple statements in a single query are detected and blocked.
+| Container Escape | Chainguard distroless | The yacht-agent container has no shell, no package manager, no libc.
+| Direct DB Access | Port not exposed | MariaDB listens on an internal port (33060) only accessible to yacht-agent.
+|===
+
+== Rules of Engagement
+
+=== In Scope
+
+* SQL injection (any variant) against the WordPress application
+* File system attacks (upload, modify, delete)
+* Authentication bypass or privilege escalation
+* Mooring protocol attacks (replay, forgery, MitM)
+* Container escape or privilege escalation within the container
+* Denial of service against the yacht-agent (if it causes data loss or compromise)
+* Any bypass of the database proxy policy engine
+
+=== Out of Scope
+
+* DDoS / volumetric attacks (we know bandwidth has limits)
+* Social engineering
+* Physical access
+* Attacks on infrastructure not part of the Wharf stack (DNS, hosting provider, etc.)
+* Attacking other users or sites
+
+=== Reporting
+
+If you find a vulnerability:
+
+1. **Do NOT exploit it beyond proof-of-concept**
+2. Email: `jonathan.jewell@open.ac.uk` with subject "Wharf Security Finding"
+3. Include: steps to reproduce, impact assessment, suggested fix (if any)
+4. We'll acknowledge within 48 hours
+
+=== Recognition
+
+Valid findings will be:
+
+* Credited in our CHANGELOG and SECURITY.md (with your permission)
+* Featured in our case study documentation
+* Potentially eligible for a bounty (amount TBD based on severity)
+
+== Technical Details
+
+=== Database Proxy Policy
+
+[source,text]
+----
+MUTABLE (writes allowed):
+  wp_comments, wp_commentmeta,
+  wp_woocommerce_orders, wp_woocommerce_order_items
+
+IMMUTABLE (writes blocked):
+  wp_users, wp_usermeta, wp_posts, wp_options
+
+ALWAYS BLOCKED:
+  DROP TABLE (any table)
+  ALTER TABLE (any table)
+  TRUNCATE (any table)
+
+DEFAULT for unknown tables:
+  AUDIT (log + allow) — will change to BLOCK in production hardening
+----
+
+=== Signature Scheme
+
+The mooring protocol uses ML-DSA-87 (FIPS 204) for all control plane operations.
+Every `init`, `verify`, `commit`, and `abort` request is signed.
+
+[source,text]
+----
+Keypair: ML-DSA-87 (post-quantum, NIST Level 5)
+Signing: Deterministic detached signatures
+Hashing: BLAKE3 for file integrity, SHAKE3-512 for provenance
+Encryption: XChaCha20-Poly1305 (for encrypted keypair storage)
+KDF: HKDF-SHA3-256
+----
+
+=== Container Security
+
+[source,text]
+----
+Base image: cgr.dev/chainguard/static:latest
+  - No shell (/bin/sh doesn't exist)
+  - No package manager
+  - No libc (statically linked Rust binary)
+  - Runs as nonroot (UID 65532)
+  - Read-only root filesystem
+----
+
+== FAQ
+
+**Q: Is this a real production site?** +
+A: Yes. Real WordPress, real traffic, real data (test content). The Wharf protection is the same as what we ship.
+
+**Q: What if I break something?** +
+A: The yacht-agent maintains integrity manifests. File changes are detected and can be reverted via the mooring protocol. The database proxy prevents destructive mutations.
+
+**Q: Can I use automated tools?** +
+A: Yes, as long as they're targeted (not volumetric DDoS). SQLMap, Burp Suite, nuclei, etc. are all fair game.
+
+**Q: What's the threat model?** +
+A: The attacker has network access to the WordPress application (standard web visitor). The attacker does NOT have SSH access, container access, or the mooring keypair.

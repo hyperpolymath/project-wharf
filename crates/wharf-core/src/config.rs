@@ -16,6 +16,7 @@
 //! 5. System config (`/etc/wharf/`)
 //! 6. Hardcoded defaults
 
+use crate::crypto::SignatureScheme;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -67,6 +68,9 @@ pub struct YachtAgentConfig {
 
     /// Directory for storing persistent keypairs (default: /etc/wharf/keys/)
     pub key_store_dir: Option<String>,
+
+    /// Signature scheme: "ml-dsa-87-only" (default, production-safe) or "hybrid" (requires ed448 audit)
+    pub signature_scheme: SignatureScheme,
 }
 
 /// Logging configuration
@@ -198,6 +202,9 @@ pub struct WharfCliConfig {
 
     /// Directory for storing persistent keypairs (default: ~/.wharf/keys/)
     pub key_store_dir: Option<String>,
+
+    /// Signature scheme: "ml-dsa-87-only" (default, production-safe) or "hybrid" (requires ed448 audit)
+    pub signature_scheme: SignatureScheme,
 }
 
 /// Path configuration
