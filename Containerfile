@@ -8,7 +8,7 @@
 # Builder stage — Wolfi-base with Rust toolchain
 FROM cgr.dev/chainguard/wolfi-base:latest AS builder
 
-RUN apk add --no-cache rust cargo pkgconf openssl-dev gcc musl-dev
+RUN apk add --no-cache rust pkgconf openssl-dev gcc glibc-dev
 
 WORKDIR /build
 
