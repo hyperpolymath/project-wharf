@@ -21,4 +21,12 @@
     (adr "ast-aware-sql-proxy"
       (status accepted)
       (description "Database proxy parses SQL AST to enforce table allowlists and block dangerous operations.")
-      (rationale "Prevents SQL injection at the wire protocol level, not just application level."))))
+      (rationale "Prevents SQL injection at the wire protocol level, not just application level."))
+    (adr "persistent-hybrid-keypairs"
+      (status accepted)
+      (description "CLI and agent persist Ed448+ML-DSA-87 keypairs to disk with restrictive file permissions.")
+      (rationale "Stable identity is required for trust establishment. Ephemeral keys prevent the yacht from recognizing returning controllers."))
+    (adr "ebpf-xdp-firewall"
+      (status accepted)
+      (description "Kernel-level packet filtering via eBPF XDP with nftables fallback.")
+      (rationale "XDP processes packets before the kernel network stack for lowest latency. Cascade to nftables ensures protection without CAP_BPF."))))

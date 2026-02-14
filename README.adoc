@@ -60,7 +60,7 @@ Wharf inverts this:
 
 === Database "Virtual Sharding"
 
-The Yacht Agent acts as a SQL proxy, parsing queries using an *Abstract Syntax Tree* (not regex!) to enforce security policies:
+The Yacht Agent acts as a SQL proxy, parsing queries using an *Abstract Syntax Tree* (via `sqlparser` 0.39, not regex!) to enforce security policies:
 
 * *Mutable Tables* (Blue Zone): Content like comments and orders—allowed to write
 * *Immutable Tables* (Red Zone): Config like users and plugins—blocked unless from Wharf
@@ -76,6 +76,23 @@ INSERT INTO wp_users (user_login, user_pass) VALUES ('hacker', 'password')
 -- Error: Policy violation: write to immutable table 'wp_users'
 ----
 
+=== Persistent Hybrid Keypairs
+
+Both the Wharf CLI and Yacht Agent persist their Ed448 + ML-DSA-87 hybrid keypairs to disk, establishing stable identities across restarts.
+
+|===
+| Component | Key Location | Permissions
+
+| Wharf CLI | `~/.wharf/keys/wharf.key` | `0600` (private), `0644` (public)
+| Yacht Agent | `/etc/wharf/keys/yacht.key` | `0600`
+|===
+
+Keys use a custom binary format (`WHRF` magic + version + length-prefixed key material). Password-encrypted serialization is available via HKDF-SHAKE512 + XChaCha20-Poly1305 for offline storage.
+
+=== eBPF XDP Firewall
+
+The Yacht Agent supports kernel-level packet filtering via eBPF XDP programs for high-performance network enforcement. Falls back to nftables when CAP_BPF is unavailable.
+
 === Filesystem Immutability
 
 The Yacht filesystem is mounted read-only with specific writable "playgrounds":
@@ -87,6 +104,21 @@ The Yacht filesystem is mounted read-only with specific writable "playgrounds":
 | `/wp-content/cache` | RAM Disk (tmpfs) | Temporary cache—wipes on restart
 | `/wp-content/plugins` | OverlayFS | "The Lie"—plugins think they write, but it's ephemeral
 |===
+
+=== File Integrity Verification
+
+The Yacht Agent verifies incoming BLAKE3 file manifests against on-disk state during the mooring verify phase. Mismatched, missing, and unexpected files are reported back to the Wharf CLI before any rsync transfer.
+
+=== Prometheus Metrics
+
+The Yacht Agent exposes real-time operational counters at `GET /metrics` (Prometheus format):
+
+* `yacht_queries_total{status="allowed|blocked|audited"}` — database proxy traffic
+* `yacht_mooring_sessions_total` — mooring session count
+* `yacht_integrity_checks_total` — integrity verification runs
+* `yacht_moored` — whether the agent is currently moored
+
+Statistics are also available as JSON via `GET /stats`.
 
 === HTTP Header Airlock
 
@@ -106,7 +138,7 @@ A Rust-based HTTP proxy strips dangerous headers and injects security headers:
 
 === Zero Trust Networking (Nebula)
 
-Admin ports are *invisible* to the public internet. The Yacht's management API (port 9000) only responds to devices with valid Nebula certificates.
+Admin ports are *invisible* to the public internet. The Yacht's management API (port 9001) only responds to devices with valid Nebula certificates. Full certificate lifecycle management (CA, signing, IP allocation, revocation) is built into `nebula.rs`.
 
 == Quick Start
 
@@ -236,6 +268,8 @@ The Wharf controller syncs state to the Yacht via a four-phase HTTP protocol:
 
 All init and commit requests carry hybrid signatures. The Yacht verifies both Ed448 and ML-DSA-87 components before accepting.
 
+The mooring HTTP client uses a 30-second request timeout, 10-second connect timeout, and connection pooling (2 idle connections per host) for resilient communication.
+
 === Threat Model
 
 Wharf assumes:
@@ -287,7 +321,9 @@ just sign-images
 
 == Configuration Reference
 
-Wharf uses https://nickel-lang.org/[Nickel] for declarative configuration:
+Wharf uses https://nickel-lang.org/[Nickel] for declarative configuration and TOML for runtime settings:
+
+=== Policy Files (Nickel)
 
 * `configs/fleet.ncl` - Define your Yachts
 * `configs/policies/database.ncl` - Database virtual sharding rules
@@ -295,6 +331,13 @@ Wharf uses https://nickel-lang.org/[Nickel] for declarative configuration:
 * `configs/policies/filesystem.ncl` - File immutability policies
 * `configs/policies/auth.ncl` - FIDO2 and session policies
 * `configs/policies/network.ncl` - Nebula mesh and firewall rules
+
+=== Runtime Configuration (TOML)
+
+Configuration is loaded with the following precedence (highest first): CLI args > environment variables > project-local (`.wharf/config.toml`) > user config (`~/.config/wharf/`) > system config (`/etc/wharf/`) > defaults.
+
+* `yacht-agent.toml` — Yacht Agent runtime settings (db proxy, firewall, API, site root, key store)
+* `wharf-cli.toml` — CLI settings (paths, build, mooring, state, key store)
 
 == Justfile Commands
 

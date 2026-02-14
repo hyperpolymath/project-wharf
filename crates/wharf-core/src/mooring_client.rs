@@ -6,6 +6,8 @@
 //! HTTP client for Wharf CLI to communicate with yacht-agent's mooring API.
 //! Handles the full mooring lifecycle: init → verify → rsync → commit.
 
+use std::time::Duration;
+
 use crate::crypto::{
     sign_hybrid, serialize_signature, serialize_public_key,
     hybrid_public_key, HybridKeypair,
@@ -50,8 +52,15 @@ impl MooringClient {
         let pubkey = hybrid_public_key(&keypair);
         let pubkey_json = serialize_public_key(&pubkey);
 
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
+            .pool_max_idle_per_host(2)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+
         Self {
-            client: reqwest::Client::new(),
+            client,
             base_url: base_url.trim_end_matches('/').to_string(),
             keypair,
             pubkey_json,

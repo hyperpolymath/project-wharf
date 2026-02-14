@@ -61,6 +61,12 @@ pub struct YachtAgentConfig {
 
     /// Firewall configuration
     pub firewall: FirewallConfig,
+
+    /// Root directory of the site being protected (for integrity verification)
+    pub site_root: Option<String>,
+
+    /// Directory for storing persistent keypairs (default: /etc/wharf/keys/)
+    pub key_store_dir: Option<String>,
 }
 
 /// Logging configuration
@@ -189,6 +195,9 @@ pub struct WharfCliConfig {
 
     /// State management settings
     pub state: StateConfig,
+
+    /// Directory for storing persistent keypairs (default: ~/.wharf/keys/)
+    pub key_store_dir: Option<String>,
 }
 
 /// Path configuration

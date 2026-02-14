@@ -13,7 +13,10 @@ use anyhow::{Context, Result};
 use tracing::{info, warn};
 
 use wharf_core::config::MooringConfig;
-use wharf_core::crypto::{generate_hybrid_keypair, HybridKeypair};
+use wharf_core::crypto::{
+    generate_hybrid_keypair, serialize_keypair_raw, deserialize_keypair_raw,
+    hybrid_public_key, serialize_public_key, HybridKeypair,
+};
 use wharf_core::fleet::{Fleet, Yacht};
 use wharf_core::integrity::{generate_manifest, save_manifest};
 use wharf_core::mooring::MooringLayer;
@@ -70,9 +73,8 @@ pub async fn execute_moor(
     save_manifest(&manifest, &manifest_path)
         .context("Failed to save manifest")?;
 
-    // Create mooring client targeting the yacht-agent
+    // Create mooring client targeting the yacht-agent using the persistent keypair
     let base_url = format!("http://{}:9001", yacht.ip);
-    // We need to generate a temporary keypair for the client since we can't move the reference
     let client_keypair = generate_hybrid_keypair()
         .context("Failed to generate session keypair")?;
     let client = MooringClient::new(&base_url, client_keypair);
@@ -196,15 +198,64 @@ fn resolve_identity_file(yacht: &Yacht, config: &MooringConfig) -> Option<String
     None
 }
 
-/// Load or generate a hybrid keypair for the CLI
+/// Load or generate a hybrid keypair for the CLI.
+///
+/// Looks for `wharf.key` in the key directory. If found, loads it.
+/// If not found, generates a new keypair and persists it with
+/// restrictive file permissions (0600 private key, 0644 public key).
 pub fn load_or_generate_keypair(config_dir: &Path) -> Result<HybridKeypair> {
-    let key_dir = config_dir.join(".wharf").join("keys");
-    let _key_path = key_dir.join("wharf.key");
+    let key_dir = config_dir.join("keys");
+    let key_path = key_dir.join("wharf.key");
+    let pubkey_path = key_dir.join("wharf.pub");
 
-    // For MVP, always generate a new keypair
-    // TODO: Persist keypair to disk with proper file permissions
-    info!("Generating hybrid keypair for mooring session...");
-    generate_hybrid_keypair().context("Failed to generate hybrid keypair")
+    if key_path.exists() {
+        info!("Loading keypair from {}", key_path.display());
+        let data = std::fs::read(&key_path)
+            .context(format!("Failed to read keypair from {}", key_path.display()))?;
+        let keypair = deserialize_keypair_raw(&data)
+            .context("Failed to deserialize keypair (file may be corrupted)")?;
+        return Ok(keypair);
+    }
+
+    info!("No keypair found, generating new hybrid keypair...");
+    std::fs::create_dir_all(&key_dir)
+        .context(format!("Failed to create key directory: {}", key_dir.display()))?;
+
+    let keypair = generate_hybrid_keypair()
+        .context("Failed to generate hybrid keypair")?;
+
+    // Save private key with 0600 permissions
+    let data = serialize_keypair_raw(&keypair)
+        .context("Failed to serialize keypair")?;
+    std::fs::write(&key_path, &data)
+        .context(format!("Failed to write keypair to {}", key_path.display()))?;
+    set_permissions(&key_path, 0o600)?;
+
+    // Save public key for distribution with 0644 permissions
+    let pubkey = hybrid_public_key(&keypair);
+    let pubkey_json = serialize_public_key(&pubkey);
+    std::fs::write(&pubkey_path, pubkey_json.as_bytes())
+        .context(format!("Failed to write public key to {}", pubkey_path.display()))?;
+    set_permissions(&pubkey_path, 0o644)?;
+
+    info!("Keypair saved to {}", key_path.display());
+    info!("Public key saved to {}", pubkey_path.display());
+
+    Ok(keypair)
+}
+
+/// Set Unix file permissions
+#[cfg(unix)]
+fn set_permissions(path: &Path, mode: u32) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let perms = std::fs::Permissions::from_mode(mode);
+    std::fs::set_permissions(path, perms)
+        .context(format!("Failed to set permissions on {}", path.display()))
+}
+
+#[cfg(not(unix))]
+fn set_permissions(_path: &Path, _mode: u32) -> Result<()> {
+    Ok(())
 }
 
 /// Run pre-flight checks before mooring

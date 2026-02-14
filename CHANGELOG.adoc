@@ -13,11 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rust workspace with wharf-core, wharf-cli, and yacht-agent crates
 - DNS zone templates (simple, shared, standard, maximalist)
 - Nickel configuration schemas for security policies
-- Database policy engine with AST-based SQL filtering
+- Database policy engine with AST-based SQL filtering (sqlparser 0.39)
 - CMS adapters for WordPress, Drupal, Joomla, Moodle
 - Shell scripts for zone rendering, auditing, and deployment
 - Comprehensive Justfile with 50+ recipes
 - RSR (Rhodium Standard Repository) compliance documentation
+
+=== Production Hardening (2026-02-14)
+- *Persistent hybrid keypairs*: Wharf CLI (`~/.wharf/keys/wharf.key`) and Yacht Agent (`/etc/wharf/keys/yacht.key`) now persist Ed448 + ML-DSA-87 keypairs across restarts with proper file permissions (0600 private, 0644 public)
+- *Keypair serialization*: Custom binary format with `WHRF` magic, versioning, and optional password encryption via HKDF-SHAKE512 + XChaCha20-Poly1305
+- *eBPF XDP firewall*: Full kernel-level packet filtering with XDP programs and userspace loader (`crates/wharf-ebpf/`)
+- *Certificate management*: Complete Nebula certificate lifecycle — CA creation, cert signing, IP allocation, and revocation (`nebula.rs`)
+- *Prometheus metrics*: Real-time counters for queries (allowed/blocked/audited), mooring sessions, integrity checks, and moored status at `GET /metrics`
+- *Statistics endpoint*: `GET /stats` now returns actual counters instead of placeholder zeros
+- *File integrity verification*: Yacht Agent mooring verify phase now checks BLAKE3 manifests against on-disk files when `site_root` is configured
+- *HTTP client resilience*: Mooring client configured with 30s timeout, 10s connect timeout, and connection pooling (2 idle per host)
+- *Configuration*: Added `key_store_dir` (CLI + agent) and `site_root` (agent) config options
 
 === Security
 - Implemented AST-based SQL query analysis (not regex)
@@ -25,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Defined filesystem immutability policies
 - Configured Nebula mesh network policies
 - Added FIDO2/WebAuthn authentication framework
+
+=== Known Issues
+- `ed448-goldilocks` v0.14.0-pre.10 is unaudited — needs third-party audit before production deployment
 
 == [0.1.0] - 2025-11-26
 
@@ -47,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| Unreleased | 2026-02-14 | Production hardening: persistent keypairs, eBPF, metrics, integrity verification |
 | 0.1.0 | 2025-11-26 | Initial release |
 
 == Upgrade Guide

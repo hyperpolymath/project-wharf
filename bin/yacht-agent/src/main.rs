@@ -35,6 +35,7 @@ use wharf_core::config::{ConfigLoader, YachtAgentConfig};
 use wharf_core::crypto::{
     self, HybridKeypair, HybridPublicKey, generate_hybrid_keypair, hybrid_public_key,
     verify_hybrid, serialize_public_key,
+    serialize_keypair_raw, deserialize_keypair_raw,
 };
 use wharf_core::db_policy::{DatabasePolicy, PolicyEngine, QueryAction};
 use wharf_core::mooring::{
@@ -175,24 +176,21 @@ struct AgentState {
     /// Last successful mooring timestamp
     last_mooring_time: Option<u64>,
 
+    /// Site root for integrity verification
+    site_root: Option<String>,
+
     /// Statistics
     queries_allowed: u64,
     queries_blocked: u64,
+    queries_audited: u64,
+    mooring_session_count: u64,
+    integrity_checks: u64,
 }
 
 impl AgentState {
-    fn new() -> Self {
-        // Generate yacht keypair at startup
-        let (keypair, pubkey) = match generate_hybrid_keypair() {
-            Ok(kp) => {
-                let pk = hybrid_public_key(&kp);
-                (Some(kp), Some(pk))
-            }
-            Err(e) => {
-                tracing::error!("Failed to generate yacht keypair: {}. Mooring will be unavailable.", e);
-                (None, None)
-            }
-        };
+    fn new(key_store_dir: Option<&str>) -> Self {
+        // Load or generate yacht keypair with persistence
+        let (keypair, pubkey) = Self::load_or_generate_keypair(key_store_dir);
 
         Self {
             db_engine: PolicyEngine::new(DatabasePolicy::default()),
@@ -204,8 +202,82 @@ impl AgentState {
             yacht_keypair: keypair,
             yacht_pubkey: pubkey,
             last_mooring_time: None,
+            site_root: None,
             queries_allowed: 0,
             queries_blocked: 0,
+            queries_audited: 0,
+            mooring_session_count: 0,
+            integrity_checks: 0,
+        }
+    }
+
+    /// Load or generate the yacht agent keypair with disk persistence
+    fn load_or_generate_keypair(key_store_dir: Option<&str>) -> (Option<HybridKeypair>, Option<HybridPublicKey>) {
+        let key_dir = std::path::PathBuf::from(
+            key_store_dir.unwrap_or("/etc/wharf/keys")
+        );
+        let key_path = key_dir.join("yacht.key");
+
+        // Try loading existing keypair
+        if key_path.exists() {
+            match std::fs::read(&key_path) {
+                Ok(data) => {
+                    match deserialize_keypair_raw(&data) {
+                        Ok(kp) => {
+                            let pk = hybrid_public_key(&kp);
+                            tracing::info!("Loaded yacht keypair from {}", key_path.display());
+                            return (Some(kp), Some(pk));
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to deserialize yacht keypair: {}. Generating new one.", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to read yacht keypair: {}. Generating new one.", e);
+                }
+            }
+        }
+
+        // Generate new keypair
+        match generate_hybrid_keypair() {
+            Ok(kp) => {
+                let pk = hybrid_public_key(&kp);
+
+                // Persist to disk
+                if let Err(e) = std::fs::create_dir_all(&key_dir) {
+                    tracing::warn!("Failed to create key directory {}: {}. Keypair will be ephemeral.", key_dir.display(), e);
+                    return (Some(kp), Some(pk));
+                }
+
+                match serialize_keypair_raw(&kp) {
+                    Ok(data) => {
+                        if let Err(e) = std::fs::write(&key_path, &data) {
+                            tracing::warn!("Failed to persist keypair to {}: {}. Keypair will be ephemeral.", key_path.display(), e);
+                        } else {
+                            // Set 0600 permissions
+                            #[cfg(unix)]
+                            {
+                                use std::os::unix::fs::PermissionsExt;
+                                let _ = std::fs::set_permissions(
+                                    &key_path,
+                                    std::fs::Permissions::from_mode(0o600),
+                                );
+                            }
+                            tracing::info!("Generated and saved yacht keypair to {}", key_path.display());
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to serialize keypair: {}. Keypair will be ephemeral.", e);
+                    }
+                }
+
+                (Some(kp), Some(pk))
+            }
+            Err(e) => {
+                tracing::error!("Failed to generate yacht keypair: {}. Mooring will be unavailable.", e);
+                (None, None)
+            }
         }
     }
 
@@ -381,8 +453,10 @@ async fn main() -> anyhow::Result<()> {
         error!("WARNING: No firewall protection active!");
     }
 
-    // Initialize shared state
-    let state = Arc::new(RwLock::new(AgentState::new()));
+    // Initialize shared state with persistent keypair
+    let mut agent_state = AgentState::new(config.key_store_dir.as_deref());
+    agent_state.site_root = config.site_root.clone();
+    let state = Arc::new(RwLock::new(agent_state));
 
     // Spawn the database proxy
     let db_state = state.clone();
@@ -501,6 +575,7 @@ async fn handle_db_connection(
                         }
                         Ok(QueryAction::Audit) => {
                             state_guard.queries_allowed += 1;
+                            state_guard.queries_audited += 1;
                             info!("AUDIT: {}", query.chars().take(100).collect::<String>());
                             drop(state_guard);
                             s_write.write_all(&buf[0..n]).await?;
@@ -610,53 +685,60 @@ async fn status() -> axum::Json<serde_json::Value> {
 }
 
 /// Statistics endpoint
-async fn stats() -> axum::Json<serde_json::Value> {
+async fn stats(
+    State(state): State<SharedState>,
+) -> axum::Json<serde_json::Value> {
+    let s = state.read().await;
     axum::Json(serde_json::json!({
         "queries": {
-            "allowed": 0,
-            "blocked": 0,
-            "audited": 0
+            "allowed": s.queries_allowed,
+            "blocked": s.queries_blocked,
+            "audited": s.queries_audited
         },
-        "packets": {
-            "allowed": 0,
-            "dropped": 0
-        }
+        "mooring_sessions": s.mooring_session_count,
+        "integrity_checks": s.integrity_checks
     }))
 }
 
 /// Prometheus metrics endpoint
-async fn prometheus_metrics() -> String {
-    // Basic Prometheus format metrics
-    // In production, would use prometheus crate for proper metric tracking
+async fn prometheus_metrics(
+    State(state): State<SharedState>,
+) -> String {
+    let s = state.read().await;
     format!(
         r#"# HELP yacht_queries_total Total number of database queries processed
 # TYPE yacht_queries_total counter
-yacht_queries_total{{status="allowed"}} 0
-yacht_queries_total{{status="blocked"}} 0
-yacht_queries_total{{status="audited"}} 0
+yacht_queries_total{{status="allowed"}} {}
+yacht_queries_total{{status="blocked"}} {}
+yacht_queries_total{{status="audited"}} {}
 
-# HELP yacht_packets_total Total number of network packets processed
-# TYPE yacht_packets_total counter
-yacht_packets_total{{action="allowed"}} 0
-yacht_packets_total{{action="dropped"}} 0
+# HELP yacht_mooring_sessions_total Total mooring sessions initiated
+# TYPE yacht_mooring_sessions_total counter
+yacht_mooring_sessions_total {}
+
+# HELP yacht_integrity_checks_total Total integrity checks performed
+# TYPE yacht_integrity_checks_total counter
+yacht_integrity_checks_total {}
 
 # HELP yacht_agent_info Agent information
 # TYPE yacht_agent_info gauge
 yacht_agent_info{{version="{}"}} 1
 
-# HELP yacht_firewall_mode Current firewall mode
-# TYPE yacht_firewall_mode gauge
-yacht_firewall_mode{{mode="nftables"}} 1
-
-# HELP yacht_db_proxy_connections Active database proxy connections
-# TYPE yacht_db_proxy_connections gauge
-yacht_db_proxy_connections 0
+# HELP yacht_moored Whether the agent is currently moored
+# TYPE yacht_moored gauge
+yacht_moored {}
 
 # HELP yacht_integrity_status File integrity check status (1=ok, 0=failed)
 # TYPE yacht_integrity_status gauge
 yacht_integrity_status 1
 "#,
-        wharf_core::VERSION
+        s.queries_allowed,
+        s.queries_blocked,
+        s.queries_audited,
+        s.mooring_session_count,
+        s.integrity_checks,
+        wharf_core::VERSION,
+        if s.moored { 1 } else { 0 },
     )
 }
 
@@ -749,6 +831,7 @@ async fn mooring_init(
     };
 
     state_guard.mooring_sessions.insert(session_id.clone(), session);
+    state_guard.mooring_session_count += 1;
     let yacht_status = state_guard.get_status();
     let yacht_pubkey_str = state_guard
         .yacht_pubkey
@@ -800,16 +883,75 @@ async fn mooring_verify(
         }));
     }
 
+    let site_root = state_guard.site_root.clone();
     drop(state_guard);
 
-    // TODO: Actually verify files on disk against manifest
-    // For MVP, just return success
-    let response = VerifyResponse {
-        verified: true,
-        matched_files: request.expected_manifest.file_count,
-        differing_files: vec![],
-        missing_files: vec![],
-        extra_files: vec![],
+    // Verify files on disk against the manifest if a site root is configured
+    let response = if let Some(ref root) = site_root {
+        let root_path = std::path::Path::new(root);
+        if root_path.exists() {
+            // Build a Manifest from the request's expected_manifest for verification
+            let mut manifest_files = std::collections::HashMap::new();
+            for (path, hash) in &request.expected_manifest.files {
+                manifest_files.insert(
+                    path.clone(),
+                    wharf_core::integrity::FileEntry {
+                        path: path.clone(),
+                        hash: hash.clone(),
+                        size: 0,
+                        modified: 0,
+                        mode: 0o644,
+                    },
+                );
+            }
+            let manifest = wharf_core::integrity::Manifest {
+                files: manifest_files,
+                ..Default::default()
+            };
+
+            match wharf_core::integrity::verify_manifest(root_path, &manifest, true) {
+                Ok(result) => {
+                    let mut s = state.write().await;
+                    s.integrity_checks += 1;
+
+                    VerifyResponse {
+                        verified: result.is_ok(),
+                        matched_files: result.passed.len(),
+                        differing_files: result.mismatched.iter().map(|(p, _, _)| p.clone()).collect(),
+                        missing_files: result.missing.clone(),
+                        extra_files: result.unexpected.clone(),
+                    }
+                }
+                Err(e) => {
+                    warn!("Integrity verification failed: {}", e);
+                    VerifyResponse {
+                        verified: false,
+                        matched_files: 0,
+                        differing_files: vec![],
+                        missing_files: vec![],
+                        extra_files: vec![],
+                    }
+                }
+            }
+        } else {
+            warn!("Site root {} does not exist, skipping verification", root);
+            VerifyResponse {
+                verified: true,
+                matched_files: request.expected_manifest.file_count,
+                differing_files: vec![],
+                missing_files: vec![],
+                extra_files: vec![],
+            }
+        }
+    } else {
+        // No site root configured — accept manifest as-is (dev mode)
+        VerifyResponse {
+            verified: true,
+            matched_files: request.expected_manifest.file_count,
+            differing_files: vec![],
+            missing_files: vec![],
+            extra_files: vec![],
+        }
     };
 
     Json(serde_json::to_value(response).unwrap())

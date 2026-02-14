@@ -21,7 +21,7 @@ use ed448_goldilocks::{SigningKey, VerifyingKey, Signature as Ed448Signature};
 use ed448_goldilocks::elliptic_curve::common::Generate;
 use hkdf::Hkdf;
 use pqcrypto_mldsa::mldsa87;
-use pqcrypto_traits::sign::{DetachedSignature, PublicKey as PqPublicKey};
+use pqcrypto_traits::sign::{DetachedSignature, PublicKey as PqPublicKey, SecretKey as PqSecretKey};
 use rand_chacha::ChaCha20Rng;
 use rand_core::{RngCore, SeedableRng};
 use sha3::{
@@ -63,6 +63,9 @@ pub enum CryptoError {
 
     #[error("Invalid key format: {0}")]
     InvalidKeyFormat(String),
+
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
 
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
@@ -129,6 +132,221 @@ pub fn hybrid_public_key(keypair: &HybridKeypair) -> HybridPublicKey {
         ed448: ed448_bytes,
         mldsa87: mldsa87_bytes,
     }
+}
+
+// =============================================================================
+// KEYPAIR SERIALIZATION
+// =============================================================================
+
+/// Magic bytes for wharf keypair files
+const KEYPAIR_MAGIC: &[u8; 4] = b"WHRF";
+
+/// Current keypair serialization version
+const KEYPAIR_VERSION: u32 = 1;
+
+impl HybridKeypair {
+    /// Get the Ed448 verifying (public) key bytes (57 bytes)
+    pub fn ed448_verifying_bytes(&self) -> Vec<u8> {
+        self.ed448_verifying.as_bytes().to_vec()
+    }
+
+    /// Get the ML-DSA-87 public key bytes
+    pub fn mldsa87_pk_bytes(&self) -> Vec<u8> {
+        pqcrypto_traits::sign::PublicKey::as_bytes(&self.mldsa87_pk).to_vec()
+    }
+
+    /// Get the ML-DSA-87 secret key bytes
+    pub fn mldsa87_sk_bytes(&self) -> Vec<u8> {
+        pqcrypto_traits::sign::SecretKey::as_bytes(&self.mldsa87_sk).to_vec()
+    }
+}
+
+/// Serialize a HybridKeypair to unencrypted bytes.
+///
+/// Format: `[4-byte magic "WHRF"][4-byte version][57-byte ed448_sk][57-byte ed448_vk]`
+///         `[4-byte mldsa_sk_len][mldsa_sk][4-byte mldsa_pk_len][mldsa_pk]`
+///
+/// Use this for agent deployments where disk encryption handles confidentiality.
+pub fn serialize_keypair_raw(keypair: &HybridKeypair) -> Result<Vec<u8>, CryptoError> {
+    let ed448_sk_bytes = keypair.ed448_signing.as_bytes();
+    let ed448_vk_bytes = keypair.ed448_verifying.as_bytes();
+    let mldsa_sk_bytes = pqcrypto_traits::sign::SecretKey::as_bytes(&keypair.mldsa87_sk);
+    let mldsa_pk_bytes = pqcrypto_traits::sign::PublicKey::as_bytes(&keypair.mldsa87_pk);
+
+    let total_size = 4 + 4 + 57 + 57 + 4 + mldsa_sk_bytes.len() + 4 + mldsa_pk_bytes.len();
+    let mut buf = Vec::with_capacity(total_size);
+
+    // Header
+    buf.extend_from_slice(KEYPAIR_MAGIC);
+    buf.extend_from_slice(&KEYPAIR_VERSION.to_le_bytes());
+
+    // Ed448 keys (fixed 57 bytes each)
+    buf.extend_from_slice(ed448_sk_bytes);
+    buf.extend_from_slice(ed448_vk_bytes);
+
+    // ML-DSA-87 keys (length-prefixed)
+    buf.extend_from_slice(&(mldsa_sk_bytes.len() as u32).to_le_bytes());
+    buf.extend_from_slice(mldsa_sk_bytes);
+    buf.extend_from_slice(&(mldsa_pk_bytes.len() as u32).to_le_bytes());
+    buf.extend_from_slice(mldsa_pk_bytes);
+
+    Ok(buf)
+}
+
+/// Deserialize a HybridKeypair from unencrypted bytes.
+pub fn deserialize_keypair_raw(data: &[u8]) -> Result<HybridKeypair, CryptoError> {
+    // Minimum size: 4 magic + 4 version + 57 sk + 57 vk + 4 sk_len + 4 pk_len = 130
+    if data.len() < 130 {
+        return Err(CryptoError::SerializationError(
+            "Keypair data too short".to_string(),
+        ));
+    }
+
+    // Verify magic
+    if &data[0..4] != KEYPAIR_MAGIC {
+        return Err(CryptoError::SerializationError(
+            "Invalid keypair file (bad magic)".to_string(),
+        ));
+    }
+
+    // Verify version
+    let version = u32::from_le_bytes(data[4..8].try_into().unwrap());
+    if version != KEYPAIR_VERSION {
+        return Err(CryptoError::SerializationError(
+            format!("Unsupported keypair version: {} (expected {})", version, KEYPAIR_VERSION),
+        ));
+    }
+
+    let mut offset = 8;
+
+    // Ed448 signing key (57 bytes)
+    let ed448_sk_bytes: [u8; 57] = data[offset..offset + 57]
+        .try_into()
+        .map_err(|_| CryptoError::InvalidKeyFormat("Ed448 signing key must be 57 bytes".to_string()))?;
+    offset += 57;
+
+    // Ed448 verifying key (57 bytes)
+    let ed448_vk_bytes: [u8; 57] = data[offset..offset + 57]
+        .try_into()
+        .map_err(|_| CryptoError::InvalidKeyFormat("Ed448 verifying key must be 57 bytes".to_string()))?;
+    offset += 57;
+
+    // ML-DSA-87 secret key (length-prefixed)
+    if data.len() < offset + 4 {
+        return Err(CryptoError::SerializationError("Truncated ML-DSA-87 secret key length".to_string()));
+    }
+    let mldsa_sk_len = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
+    offset += 4;
+
+    if data.len() < offset + mldsa_sk_len {
+        return Err(CryptoError::SerializationError("Truncated ML-DSA-87 secret key".to_string()));
+    }
+    let mldsa_sk_bytes = &data[offset..offset + mldsa_sk_len];
+    offset += mldsa_sk_len;
+
+    // ML-DSA-87 public key (length-prefixed)
+    if data.len() < offset + 4 {
+        return Err(CryptoError::SerializationError("Truncated ML-DSA-87 public key length".to_string()));
+    }
+    let mldsa_pk_len = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
+    offset += 4;
+
+    if data.len() < offset + mldsa_pk_len {
+        return Err(CryptoError::SerializationError("Truncated ML-DSA-87 public key".to_string()));
+    }
+    let mldsa_pk_bytes = &data[offset..offset + mldsa_pk_len];
+
+    // Reconstruct keys
+    let ed448_signing = SigningKey::try_from(ed448_sk_bytes.as_slice())
+        .map_err(|e| CryptoError::InvalidKeyFormat(format!("Ed448 signing key: {}", e)))?;
+    let ed448_verifying = VerifyingKey::from_bytes(&ed448_vk_bytes)
+        .map_err(|e| CryptoError::InvalidKeyFormat(format!("Ed448 verifying key: {}", e)))?;
+
+    let mldsa87_sk = mldsa87::SecretKey::from_bytes(mldsa_sk_bytes)
+        .map_err(|_| CryptoError::InvalidKeyFormat("Invalid ML-DSA-87 secret key".to_string()))?;
+    let mldsa87_pk = mldsa87::PublicKey::from_bytes(mldsa_pk_bytes)
+        .map_err(|_| CryptoError::InvalidKeyFormat("Invalid ML-DSA-87 public key".to_string()))?;
+
+    Ok(HybridKeypair {
+        ed448_signing,
+        ed448_verifying,
+        mldsa87_pk,
+        mldsa87_sk,
+    })
+}
+
+/// Serialize a HybridKeypair with password-based encryption.
+///
+/// Format: `[4-byte magic][4-byte version][32-byte salt][24-byte nonce][encrypted payload]`
+///
+/// The payload is the raw keypair bytes encrypted with XChaCha20-Poly1305 using a key
+/// derived via HKDF from the password.
+pub fn serialize_keypair(keypair: &HybridKeypair, password: &[u8]) -> Result<Vec<u8>, CryptoError> {
+    // Serialize the inner payload (raw format without the magic/version header)
+    let raw = serialize_keypair_raw(keypair)?;
+    // Skip the 8-byte header (magic + version) for the encrypted payload
+    let payload = &raw[8..];
+
+    // Derive encryption key from password
+    let salt = secure_random_bytes(32);
+    let key = derive_key_hkdf_shake512(password, Some(&salt), b"wharf-keypair-v1")?;
+
+    // Encrypt
+    let nonce = secure_random_bytes(24);
+    let ciphertext = encrypt_xchacha20(&key, &nonce, payload)?;
+
+    // Build output: magic + version + salt + nonce + ciphertext
+    let mut buf = Vec::with_capacity(4 + 4 + 32 + 24 + ciphertext.len());
+    buf.extend_from_slice(KEYPAIR_MAGIC);
+    buf.extend_from_slice(&KEYPAIR_VERSION.to_le_bytes());
+    buf.extend_from_slice(&salt);
+    buf.extend_from_slice(&nonce);
+    buf.extend_from_slice(&ciphertext);
+
+    Ok(buf)
+}
+
+/// Deserialize a HybridKeypair from password-encrypted bytes.
+pub fn deserialize_keypair(data: &[u8], password: &[u8]) -> Result<HybridKeypair, CryptoError> {
+    // Minimum: 4 magic + 4 version + 32 salt + 24 nonce + some ciphertext
+    if data.len() < 65 {
+        return Err(CryptoError::SerializationError(
+            "Encrypted keypair data too short".to_string(),
+        ));
+    }
+
+    // Verify magic
+    if &data[0..4] != KEYPAIR_MAGIC {
+        return Err(CryptoError::SerializationError(
+            "Invalid keypair file (bad magic)".to_string(),
+        ));
+    }
+
+    // Verify version
+    let version = u32::from_le_bytes(data[4..8].try_into().unwrap());
+    if version != KEYPAIR_VERSION {
+        return Err(CryptoError::SerializationError(
+            format!("Unsupported keypair version: {}", version),
+        ));
+    }
+
+    let salt = &data[8..40];
+    let nonce = &data[40..64];
+    let ciphertext = &data[64..];
+
+    // Derive key from password
+    let key = derive_key_hkdf_shake512(password, Some(salt), b"wharf-keypair-v1")?;
+
+    // Decrypt
+    let payload = decrypt_xchacha20(&key, nonce, ciphertext)?;
+
+    // Reconstruct: prepend a fake raw header so deserialize_keypair_raw works
+    let mut raw = Vec::with_capacity(8 + payload.len());
+    raw.extend_from_slice(KEYPAIR_MAGIC);
+    raw.extend_from_slice(&KEYPAIR_VERSION.to_le_bytes());
+    raw.extend_from_slice(&payload);
+
+    deserialize_keypair_raw(&raw)
 }
 
 // =============================================================================
@@ -513,5 +731,77 @@ mod tests {
         let deserialized = deserialize_public_key(&json).unwrap();
         assert_eq!(deserialized.ed448, pk.ed448);
         assert_eq!(deserialized.mldsa87, pk.mldsa87);
+    }
+
+    #[test]
+    fn test_keypair_serialization_roundtrip() {
+        let keypair = generate_hybrid_keypair().unwrap();
+        let pubkey_before = hybrid_public_key(&keypair);
+
+        let data = serialize_keypair_raw(&keypair).unwrap();
+        let restored = deserialize_keypair_raw(&data).unwrap();
+        let pubkey_after = hybrid_public_key(&restored);
+
+        // Public keys must match
+        assert_eq!(pubkey_before.ed448, pubkey_after.ed448);
+        assert_eq!(pubkey_before.mldsa87, pubkey_after.mldsa87);
+
+        // Sign with restored key, verify with original pubkey
+        let msg = b"roundtrip test message";
+        let sig = sign_hybrid(&restored, msg);
+        verify_hybrid(&pubkey_before, msg, &sig).unwrap();
+    }
+
+    #[test]
+    fn test_keypair_encrypted_roundtrip() {
+        let keypair = generate_hybrid_keypair().unwrap();
+        let pubkey_before = hybrid_public_key(&keypair);
+        let password = b"test-password-wharf";
+
+        let encrypted = serialize_keypair(&keypair, password).unwrap();
+        let restored = deserialize_keypair(&encrypted, password).unwrap();
+        let pubkey_after = hybrid_public_key(&restored);
+
+        assert_eq!(pubkey_before.ed448, pubkey_after.ed448);
+        assert_eq!(pubkey_before.mldsa87, pubkey_after.mldsa87);
+
+        // Verify signing still works
+        let msg = b"encrypted roundtrip";
+        let sig = sign_hybrid(&restored, msg);
+        verify_hybrid(&pubkey_before, msg, &sig).unwrap();
+    }
+
+    #[test]
+    fn test_keypair_wrong_password() {
+        let keypair = generate_hybrid_keypair().unwrap();
+        let encrypted = serialize_keypair(&keypair, b"correct").unwrap();
+
+        // Wrong password should fail decryption
+        assert!(deserialize_keypair(&encrypted, b"wrong").is_err());
+    }
+
+    #[test]
+    fn test_keypair_persistence() {
+        let dir = tempfile::tempdir().unwrap();
+        let key_path = dir.path().join("test.key");
+
+        // Generate, serialize, write
+        let keypair = generate_hybrid_keypair().unwrap();
+        let pubkey_original = hybrid_public_key(&keypair);
+        let data = serialize_keypair_raw(&keypair).unwrap();
+        std::fs::write(&key_path, &data).unwrap();
+
+        // Read, deserialize, verify
+        let loaded_data = std::fs::read(&key_path).unwrap();
+        let restored = deserialize_keypair_raw(&loaded_data).unwrap();
+        let pubkey_restored = hybrid_public_key(&restored);
+
+        assert_eq!(pubkey_original.ed448, pubkey_restored.ed448);
+        assert_eq!(pubkey_original.mldsa87, pubkey_restored.mldsa87);
+
+        // Sign → verify across the persistence boundary
+        let msg = b"persistence test";
+        let sig = sign_hybrid(&restored, msg);
+        verify_hybrid(&pubkey_original, msg, &sig).unwrap();
     }
 }
