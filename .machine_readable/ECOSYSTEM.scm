@@ -16,4 +16,6 @@
     (project "hypatia" (relationship ci-cd-tool) (description "Neurosymbolic CI/CD security intelligence"))
     (project "gitbot-fleet" (relationship automation) (description "Bot orchestration: rhodibot, echidnabot, sustainabot, glambot, seambot, finishbot"))
     (project "verisimdb-data" (relationship quality-data) (description "Security scan data ingestion for weak point tracking"))
-    (project "wordpress" (relationship adapter-target) (description "Primary CMS adapter — GPL-2.0 dashboard plugin in adapters/wordpress-wharf/"))))
+    (project "wordpress" (relationship adapter-target) (description "Primary CMS adapter — GPL-2.0 dashboard plugin in adapters/wordpress-wharf/"))
+    (project "openlitespeed" (relationship web-server) (description "High-performance web server for local and production deployment (litespeedtech/openlitespeed:1.8.5-lsphp83)"))
+    (project "mariadb" (relationship database-backend) (description "MariaDB 10.11 hidden behind yacht-agent SQL proxy"))))

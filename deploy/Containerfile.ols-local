@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <jonathan.jewell@open.ac.uk>
+#
+# OpenLiteSpeed local dev image — WordPress-ready with MySQL extensions
+# EXCEPTION: No Chainguard OLS image exists — litespeedtech base required
+
+FROM docker.io/litespeedtech/openlitespeed:1.8.5-lsphp83
+
+# lsphp83-common (bundled in base) provides gd, mbstring, xml, zip
+# Only need to add packages not already included
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    lsphp83-mysql \
+    lsphp83-curl \
+    lsphp83-intl \
+    lsphp83-imagick \
+    lsphp83-redis \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+EXPOSE 8088
+
+WORKDIR /var/www/vhosts/localhost/html

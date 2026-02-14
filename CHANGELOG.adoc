@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive Justfile with 50+ recipes
 - RSR (Rhodium Standard Repository) compliance documentation
 
+=== Local Deployment Proof (2026-02-14)
+- *Local compose stack*: `deploy/compose.yaml` with 3-service podman compose (MariaDB, yacht-agent proxy, OpenLiteSpeed+WordPress). Full end-to-end proof.
+- *Containerfile bug fixes*: `Containerfile.agent` fixed Wolfi package names (musl→glibc), main `Containerfile` fixed yacht-agent runtime stage (static→wolfi-base to avoid glibc segfault)
+- *WordPress adapter fix*: `wharf-adapter.php` now fetches both `/stats` and `/status` endpoints, mapping nested JSON to flat format the widget expects
+- *OLS container*: `deploy/Containerfile.ols-local` wrapping litespeedtech/openlitespeed:1.8.5-lsphp83 with WordPress-required PHP extensions
+- *Automated setup*: `deploy/local-test.sh` downloads WordPress, fetches real salt keys, generates wp-config.php with `DB_HOST=agent:3306`, copies adapter plugin, builds and starts stack
+- *SQL injection verification*: `deploy/verify-sqli.sh` proves 6/6 attacks blocked (SELECT passes, INSERT wp_users/DROP/ALTER/TRUNCATE/UNION all blocked), with live agent stats
+
 === V1.0 Shipping Preparation (2026-02-14)
 - *Signature scheme feature flag*: Ed448 now opt-in via `SignatureScheme::Hybrid`; default is `MlDsa87Only` (FIPS 204 peer-reviewed). Configurable via `--signature-scheme` CLI arg and TOML config.
 - *SQL injection smoke tests*: 19 integration tests proving AST-based proxy blocks real WordPress attack patterns (user creation, options manipulation, content defacement, DDL, stacked injection)
@@ -71,7 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | 2026-02-14 | V1.0 shipping: signature scheme flag, SQLi tests, deployment package, WordPress adapter, hack-me challenge |
+| Unreleased | 2026-02-14 | Local E2E deployment proof, Containerfile fixes, WordPress adapter stats fix, compose stack, SQLi verification |
 | 0.1.0 | 2025-11-26 | Initial release |
 
 == Upgrade Guide

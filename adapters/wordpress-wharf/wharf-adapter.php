@@ -37,7 +37,13 @@ function wharf_add_dashboard_widget() {
 add_action('wp_dashboard_setup', 'wharf_add_dashboard_widget');
 
 /**
- * Fetch stats from yacht-agent API
+ * Fetch stats and status from yacht-agent API
+ *
+ * Merges /stats (query counters) and /status (mooring, components) into a
+ * flat array the dashboard widget expects.
+ *
+ * /stats returns: {"queries":{"allowed":N,"blocked":N,"audited":N},"mooring_sessions":N,"integrity_checks":N}
+ * /status returns: {"status":"active","moored":bool,"version":"...","components":{...}}
  */
 function wharf_fetch_agent_stats() {
     $cache_key = 'wharf_agent_stats';
@@ -46,24 +52,41 @@ function wharf_fetch_agent_stats() {
         return $cached;
     }
 
-    $response = wp_remote_get(WHARF_AGENT_URL . '/stats', array(
-        'timeout' => 3,
-        'sslverify' => false,
-    ));
+    $request_args = array('timeout' => 3, 'sslverify' => false);
 
-    if (is_wp_error($response)) {
-        return array('error' => $response->get_error_message());
+    // Fetch /stats
+    $stats_response = wp_remote_get(WHARF_AGENT_URL . '/stats', $request_args);
+    if (is_wp_error($stats_response)) {
+        return array('error' => $stats_response->get_error_message());
+    }
+    $stats_data = json_decode(wp_remote_retrieve_body($stats_response), true);
+    if (!is_array($stats_data)) {
+        return array('error' => 'Invalid response from yacht-agent /stats');
     }
 
-    $body = wp_remote_retrieve_body($response);
-    $data = json_decode($body, true);
-
-    if (!is_array($data)) {
-        return array('error' => 'Invalid response from yacht-agent');
+    // Fetch /status
+    $status_response = wp_remote_get(WHARF_AGENT_URL . '/status', $request_args);
+    if (is_wp_error($status_response)) {
+        return array('error' => $status_response->get_error_message());
+    }
+    $status_data = json_decode(wp_remote_retrieve_body($status_response), true);
+    if (!is_array($status_data)) {
+        return array('error' => 'Invalid response from yacht-agent /status');
     }
 
-    set_transient($cache_key, $data, 30); // Cache for 30 seconds
-    return $data;
+    // Map nested responses to flat format for the widget
+    $merged = array(
+        'queries_allowed' => isset($stats_data['queries']['allowed']) ? $stats_data['queries']['allowed'] : 0,
+        'queries_blocked' => isset($stats_data['queries']['blocked']) ? $stats_data['queries']['blocked'] : 0,
+        'queries_audited' => isset($stats_data['queries']['audited']) ? $stats_data['queries']['audited'] : 0,
+        'moored'          => !empty($status_data['moored']),
+        'firewall_mode'   => isset($status_data['components']['shield']) ? $status_data['components']['shield'] : 'unknown',
+        'signature_scheme' => 'ed25519',
+        'version'         => isset($status_data['version']) ? $status_data['version'] : 'unknown',
+    );
+
+    set_transient($cache_key, $merged, 30);
+    return $merged;
 }
 
 /**

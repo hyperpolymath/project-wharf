@@ -86,6 +86,53 @@ curl http://localhost:9001/metrics
 curl http://localhost:9001/health
 ----
 
+== Local Development (Podman Compose)
+
+For a quick local proof-of-concept with WordPress behind the SQL proxy:
+
+[source,bash]
+----
+cd deploy
+
+# Automated: downloads WordPress, generates wp-config.php, builds + starts stack
+bash local-test.sh
+
+# Visit WordPress setup wizard
+# http://localhost:8080
+
+# Prove SQL injection is blocked (6 tests)
+bash verify-sqli.sh
+
+# Check agent stats
+curl http://localhost:9001/stats
+
+# Tear down
+podman compose down
+rm -rf wharf-local/    # removes all data
+----
+
+=== Local Stack Architecture
+
+[source,text]
+----
+Browser :8080 → OLS (web) → PHP/WordPress → agent:3306 → db:3306 (MariaDB)
+                                                ↑
+                                       AST SQL parser (sqlparser 0.39)
+                                       Blocks writes to wp_users, wp_options, wp_posts
+                                       Blocks DROP/ALTER/TRUNCATE always
+----
+
+=== Services
+
+[cols="1,2,1"]
+|===
+| Service | Purpose | Port
+
+| `db` | MariaDB 10.11 (hidden, no host exposure) | 3306 (internal)
+| `agent` | yacht-agent SQL proxy + API | 3306 (proxy), 9001 (API)
+| `web` | OpenLiteSpeed 1.8.5 + PHP 8.3 | 80→8080 (host)
+|===
+
 == Security Notes
 
 * The default signature scheme is `ml-dsa-87-only` (FIPS 204, post-quantum safe)

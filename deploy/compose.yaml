@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <jonathan.jewell@open.ac.uk>
+#
+# Project Wharf — Local deployment stack
+# =======================================
+# WordPress behind yacht-agent SQL proxy with MariaDB backend.
+#
+# Usage: podman compose -f deploy/compose.yaml up -d
+#        podman compose -f deploy/compose.yaml down
+
+services:
+  # -------------------------------------------------------------------------
+  # MariaDB — hidden behind the agent, NOT exposed to host
+  # -------------------------------------------------------------------------
+  db:
+    image: docker.io/library/mariadb:10.11
+    environment:
+      MARIADB_ROOT_PASSWORD: "${MARIADB_ROOT_PASSWORD:-wharf-demo-root-2026}"
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: "${MARIADB_PASSWORD:-wharf-demo-pass-2026}"
+    volumes:
+      - ./wharf-local/db:/var/lib/mysql:Z
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [wharf]
+    restart: unless-stopped
+
+  # -------------------------------------------------------------------------
+  # Yacht Agent — SQL proxy + AST firewall
+  # WordPress connects here instead of directly to MariaDB
+  # -------------------------------------------------------------------------
+  agent:
+    build:
+      context: ..
+      dockerfile: infra/containers/Containerfile.agent
+    ports:
+      - "9001:9001"
+    command: ["--listen-port", "3306", "--shadow-host", "db", "--shadow-port", "3306", "--api-port", "9001"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [wharf]
+    restart: unless-stopped
+
+  # -------------------------------------------------------------------------
+  # OpenLiteSpeed — serves WordPress, connects to agent:3306 for DB
+  # -------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: Containerfile.ols-local
+    volumes:
+      - ./wharf-local/html:/var/www/vhosts/localhost/html:Z
+    ports:
+      - "8080:80"
+    environment:
+      WHARF_AGENT_URL: "http://agent:9001"
+    depends_on:
+      - agent
+    networks: [wharf]
+    restart: unless-stopped
+
+networks:
+  wharf:
+    driver: bridge

@@ -51,6 +51,21 @@
     |  wharf-ebpf (optional, excluded from default build)       |
     |  XDP kernel program + userspace loader (aya 0.12)         |
     +-----------------------------------------------------------+
+
+    LOCAL DEPLOYMENT (deploy/compose.yaml)
+    +-----------------------------------------------------------+
+    |                                                           |
+    |  Browser :8080 → OLS (web) → PHP/WordPress                |
+    |                       ↓                                   |
+    |              agent:3306 (yacht-agent proxy)                |
+    |                   ↓           ↑                           |
+    |              AST SQL parser   /stats /status /health      |
+    |              (sqlparser 0.39) (API :9001)                  |
+    |                   ↓                                       |
+    |              db:3306 (MariaDB 10.11)                       |
+    |                                                           |
+    |  Blocked: INSERT wp_users, DROP, ALTER, TRUNCATE, UNION   |
+    +-----------------------------------------------------------+
 ```
 
 ## Completion Dashboard
@@ -79,8 +94,9 @@
 | - signature scheme     | `[██████████]` 100%         | CLI flag --signature-scheme, config support |
 | **wharf-ebpf**         | `[████████░░]` 80%           | XDP program + loader, needs production testing |
 | **nebula.rs**          | `[██████████]` 100%          | CA, cert signing, IP allocation, revocation |
-| **wordpress-adapter**  | `[██████████]` 100%          | GPL-2.0 dashboard widget + admin bar indicator |
+| **wordpress-adapter**  | `[██████████]` 100%          | GPL-2.0 dashboard widget + admin bar indicator (stats/status fixed) |
 | **deployment**         | `[██████████]` 100%          | setup.sh, DEPLOY.adoc, systemd unit, selur-compose |
+| **local-deploy**       | `[██████████]` 100%          | compose.yaml, local-test.sh, verify-sqli.sh — E2E proven |
 | **Overall**            | `[█████████░]` 95%           | ed448 audit pending, otherwise shipping |
 
 ## Key Dependencies

@@ -31,8 +31,8 @@ COPY --from=builder /build/target/release/wharf /usr/local/bin/wharf
 ENTRYPOINT ["wharf"]
 CMD ["--help"]
 
-# Runtime image for yacht-agent (distroless — zero attack surface)
-FROM cgr.dev/chainguard/static:latest AS yacht-agent
+# Runtime image for yacht-agent (wolfi-base — glibc required)
+FROM cgr.dev/chainguard/wolfi-base:latest AS yacht-agent
 
 COPY --from=builder /build/target/release/yacht-agent /yacht-agent
 

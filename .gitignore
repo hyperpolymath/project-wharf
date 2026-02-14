@@ -78,6 +78,9 @@ htmlcov/
 *.tmp
 *.bak
 
+# Local deployment runtime data
+deploy/wharf-local/
+
 # AI/Sync artifacts
 ai-cli-crash-capture/
 .directory

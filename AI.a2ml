@@ -24,6 +24,14 @@
 - AST-aware SQL proxy blocks injection at wire level
 - Fail-closed: if it can't verify, it blocks
 
+## Local Deployment
+
+- **compose stack**: `deploy/compose.yaml` — 3-service podman compose (db, agent, web)
+- **setup script**: `deploy/local-test.sh` — automated WordPress + stack setup
+- **SQLi proof**: `deploy/verify-sqli.sh` — 6/6 injection attacks provably blocked
+- **Architecture**: Browser→OLS→WordPress→agent:3306 (AST proxy)→MariaDB
+- WordPress `DB_HOST=agent:3306` — all SQL goes through yacht-agent
+
 ## Integration
 
 - **panic-attack**: Weekly security scan via `.github/workflows/security-scan.yml`

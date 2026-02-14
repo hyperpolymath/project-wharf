@@ -29,4 +29,12 @@
     (adr "ebpf-xdp-firewall"
       (status accepted)
       (description "Kernel-level packet filtering via eBPF XDP with nftables fallback.")
-      (rationale "XDP processes packets before the kernel network stack for lowest latency. Cascade to nftables ensures protection without CAP_BPF."))))
+      (rationale "XDP processes packets before the kernel network stack for lowest latency. Cascade to nftables ensures protection without CAP_BPF."))
+    (adr "glibc-runtime-containers"
+      (status accepted)
+      (description "Yacht-agent containers use wolfi-base runtime (glibc) instead of static/distroless.")
+      (rationale "Wolfi Rust toolchain produces glibc-linked binaries. Static image has no glibc, causing runtime segfaults. Wolfi-base provides glibc with minimal attack surface."))
+    (adr "ols-local-deployment"
+      (status accepted)
+      (description "Local deployment uses OpenLiteSpeed with WordPress behind yacht-agent SQL proxy.")
+      (rationale "OLS provides native PHP LSAPI (faster than FastCGI), WordPress connects to agent:3306 which parses SQL AST before forwarding to MariaDB."))))
