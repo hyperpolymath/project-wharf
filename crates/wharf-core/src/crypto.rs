@@ -8,7 +8,7 @@
 //! - **BLAKE3** hashing for file integrity (fast, verified)
 //! - **SHAKE3-512** (SHA3-SHAKE256 with 512-bit output) for provenance/KDF
 //! - **XChaCha20-Poly1305** AEAD symmetric encryption
-//! - **HKDF-SHA3-256** key derivation
+//! - **HKDF-SHA3-256** key derivation (via `derive_key_hkdf_sha3_256`)
 //! - **Argon2id** password hashing (512 MiB, 8 iterations, 4 lanes)
 //! - **ChaCha20-DRBG** CSPRNG
 
@@ -310,7 +310,7 @@ pub fn serialize_keypair(keypair: &HybridKeypair, password: &[u8]) -> Result<Vec
 
     // Derive encryption key from password
     let salt = secure_random_bytes(32);
-    let key = derive_key_hkdf_shake512(password, Some(&salt), b"wharf-keypair-v1")?;
+    let key = derive_key_hkdf_sha3_256(password, Some(&salt), b"wharf-keypair-v1")?;
 
     // Encrypt
     let nonce = secure_random_bytes(24);
@@ -356,7 +356,7 @@ pub fn deserialize_keypair(data: &[u8], password: &[u8]) -> Result<HybridKeypair
     let ciphertext = &data[64..];
 
     // Derive key from password
-    let key = derive_key_hkdf_shake512(password, Some(salt), b"wharf-keypair-v1")?;
+    let key = derive_key_hkdf_sha3_256(password, Some(salt), b"wharf-keypair-v1")?;
 
     // Decrypt
     let payload = decrypt_xchacha20(&key, nonce, ciphertext)?;
@@ -577,7 +577,7 @@ pub fn decrypt_xchacha20(
 /// Derive a key using HKDF with SHA3-256 as the hash function
 ///
 /// Returns a 32-byte derived key suitable for XChaCha20-Poly1305.
-pub fn derive_key_hkdf_shake512(
+pub fn derive_key_hkdf_sha3_256(
     ikm: &[u8],
     salt: Option<&[u8]>,
     info: &[u8],
@@ -757,15 +757,15 @@ mod tests {
         let salt = b"optional salt";
         let info = b"context info";
 
-        let key1 = derive_key_hkdf_shake512(ikm, Some(salt), info).unwrap();
+        let key1 = derive_key_hkdf_sha3_256(ikm, Some(salt), info).unwrap();
         assert_eq!(key1.len(), 32);
 
         // Same inputs should produce same output
-        let key2 = derive_key_hkdf_shake512(ikm, Some(salt), info).unwrap();
+        let key2 = derive_key_hkdf_sha3_256(ikm, Some(salt), info).unwrap();
         assert_eq!(key1, key2);
 
         // Different info should produce different output
-        let key3 = derive_key_hkdf_shake512(ikm, Some(salt), b"different").unwrap();
+        let key3 = derive_key_hkdf_sha3_256(ikm, Some(salt), b"different").unwrap();
         assert_ne!(key1, key3);
     }
 

@@ -81,8 +81,14 @@ pub fn wharf_shield(ctx: XdpContext) -> u32 {
 /// The main packet inspection logic
 fn try_wharf_shield(ctx: XdpContext) -> Result<u32, ()> {
     // A. Parse Ethernet Header
+    // SAFETY: ptr_at performs bounds checking (start + offset + size_of::<T> <= end)
+    // before returning the pointer. The XDP context guarantees the packet buffer is
+    // valid for the lifetime of try_wharf_shield. EthHdr is at offset 0 (always valid
+    // if the packet has at least EthHdr::LEN bytes).
     let eth_hdr: *const EthHdr = unsafe { ptr_at(&ctx, 0)? };
 
+    // SAFETY: eth_hdr is bounds-checked by ptr_at; reading ether_type (u16) is within
+    // the EthHdr struct size.
     match unsafe { (*eth_hdr).ether_type } {
         EtherType::Ipv4 => {}
         // Allow IPv6 to pass for now (can be extended)
@@ -94,27 +100,38 @@ fn try_wharf_shield(ctx: XdpContext) -> Result<u32, ()> {
     }
 
     // B. Parse IPv4 Header
+    // SAFETY: ptr_at bounds-checks offset EthHdr::LEN + size_of::<Ipv4Hdr> against
+    // packet length. We only reach here if ether_type == Ipv4.
     let ipv4_hdr: *const Ipv4Hdr = unsafe { ptr_at(&ctx, EthHdr::LEN)? };
+    // SAFETY: ipv4_hdr is bounds-checked; src_addr is a u32 within the Ipv4Hdr struct.
     let src_ip = unsafe { (*ipv4_hdr).src_addr };
 
     // C. THE APL CHECK - Instant Annihilation
+    // SAFETY: eBPF map access via aya is safe if the map type matches the key type.
+    // BLOCKLIST is HashMap<u32, u32> and src_ip is u32.
     if unsafe { BLOCKLIST.get(&src_ip) }.is_some() {
         // Packet is from a known bad IP - drop it before the kernel sees it
         return Ok(xdp_action::XDP_DROP);
     }
 
     // D. PROTOCOL LOCKDOWN
+    // SAFETY: ipv4_hdr is bounds-checked; proto is a u8 within the Ipv4Hdr struct.
     let protocol = unsafe { (*ipv4_hdr).proto };
 
     match protocol {
         IpProto::Tcp => {
             // Parse TCP header
+            // SAFETY: ptr_at bounds-checks offset EthHdr::LEN + Ipv4Hdr::LEN +
+            // size_of::<TcpHdr> against packet length. Only reached if proto == Tcp.
             let tcp_hdr: *const TcpHdr = unsafe {
                 ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN)?
             };
+            // SAFETY: tcp_hdr is bounds-checked; dest is a u16 within TcpHdr.
             let dest_port = u16::from_be(unsafe { (*tcp_hdr).dest });
 
             // Check against allowed TCP ports
+            // SAFETY: eBPF map access; ALLOWED_TCP_PORTS is HashMap<u16, u32>,
+            // dest_port is u16.
             if unsafe { ALLOWED_TCP_PORTS.get(&dest_port) }.is_some() {
                 Ok(xdp_action::XDP_PASS)
             } else {
@@ -124,12 +141,17 @@ fn try_wharf_shield(ctx: XdpContext) -> Result<u32, ()> {
         }
         IpProto::Udp => {
             // Parse UDP header
+            // SAFETY: ptr_at bounds-checks offset EthHdr::LEN + Ipv4Hdr::LEN +
+            // size_of::<UdpHdr> against packet length. Only reached if proto == Udp.
             let udp_hdr: *const UdpHdr = unsafe {
                 ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN)?
             };
+            // SAFETY: udp_hdr is bounds-checked; dest is a u16 within UdpHdr.
             let dest_port = u16::from_be(unsafe { (*udp_hdr).dest });
 
             // Check against allowed UDP ports
+            // SAFETY: eBPF map access; ALLOWED_UDP_PORTS is HashMap<u16, u32>,
+            // dest_port is u16.
             if unsafe { ALLOWED_UDP_PORTS.get(&dest_port) }.is_some() {
                 Ok(xdp_action::XDP_PASS)
             } else {
@@ -148,7 +170,15 @@ fn try_wharf_shield(ctx: XdpContext) -> Result<u32, ()> {
 // HELPERS
 // =============================================================================
 
-/// Safe pointer arithmetic for eBPF verifier compliance
+/// Safe pointer arithmetic for eBPF verifier compliance.
+///
+/// # Safety
+///
+/// The caller must ensure `ctx` is a valid XDP context from the eBPF runtime.
+/// This function performs bounds checking: it verifies that `offset + size_of::<T>()`
+/// does not exceed the packet data end before constructing the pointer. The returned
+/// pointer is valid for reads of `size_of::<T>()` bytes for the lifetime of the XDP
+/// program invocation (the kernel guarantees the packet buffer is stable during XDP).
 #[inline(always)]
 unsafe fn ptr_at<T>(ctx: &XdpContext, offset: usize) -> Result<*const T, ()> {
     let start = ctx.data();

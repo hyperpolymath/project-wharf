@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# CODEOWNERS — defines review requirements for pull requests
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything
+* @hyperpolymath
+
+# Crypto code requires explicit review
+crates/wharf-core/src/crypto.rs @hyperpolymath
+
+# eBPF kernel code requires explicit review
+crates/wharf-ebpf/ @hyperpolymath
+
+# Security-sensitive files
+SECURITY.md @hyperpolymath
+.well-known/ @hyperpolymath
+deploy/ @hyperpolymath

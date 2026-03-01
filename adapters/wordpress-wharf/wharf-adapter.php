@@ -52,7 +52,11 @@ function wharf_fetch_agent_stats() {
         return $cached;
     }
 
-    $request_args = array('timeout' => 3, 'sslverify' => false);
+    // Enable SSL verification unless agent is on localhost (loopback is trusted).
+    // For remote agents, WHARF_AGENT_URL should use https:// and sslverify stays true.
+    $agent_host = wp_parse_url(WHARF_AGENT_URL, PHP_URL_HOST);
+    $is_loopback = in_array($agent_host, array('localhost', '127.0.0.1', '::1'), true);
+    $request_args = array('timeout' => 3, 'sslverify' => !$is_loopback);
 
     // Fetch /stats
     $stats_response = wp_remote_get(WHARF_AGENT_URL . '/stats', $request_args);

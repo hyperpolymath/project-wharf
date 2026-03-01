@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# Security contact information per RFC 9116
+# https://www.rfc-editor.org/rfc/rfc9116
+
+Contact: mailto:security@hyperpolymath.net
+Expires: 2027-03-01T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://github.com/hyperpolymath/project-wharf/.well-known/security.txt
+Policy: https://github.com/hyperpolymath/project-wharf/blob/main/SECURITY.md

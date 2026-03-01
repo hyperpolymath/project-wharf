@@ -144,19 +144,20 @@ impl PolicyEngine {
         // Normalize table name (remove schema prefix, backticks, etc.)
         let normalized = table.trim_matches('`').to_lowercase();
 
-        // Check if explicitly allowed
-        if self.policy.allow_write.iter().any(|t| normalized.contains(&t.to_lowercase())) {
+        // Check if explicitly allowed (exact match, not substring)
+        if self.policy.allow_write.iter().any(|t| normalized == t.to_lowercase()) {
             return Ok(QueryAction::Allow);
         }
 
-        // Check if explicitly locked
-        if self.policy.lock_down.iter().any(|t| normalized.contains(&t.to_lowercase())) {
+        // Check if explicitly locked (exact match, not substring)
+        if self.policy.lock_down.iter().any(|t| normalized == t.to_lowercase()) {
             return Err(PolicyError::ImmutableTableViolation { table: normalized });
         }
 
-        // Default: audit and allow (fail-open for unknown tables)
-        // In production, you might want this to be Block (fail-closed)
-        Ok(QueryAction::Audit)
+        // Default: block unknown tables (fail-closed)
+        // Any table not explicitly in allow_write or lock_down is blocked.
+        // This prevents writes to newly created or unexpected tables.
+        Ok(QueryAction::Block)
     }
 
     fn extract_table_name(&self, table: &sqlparser::ast::TableWithJoins) -> String {
@@ -166,8 +167,45 @@ impl PolicyEngine {
     fn extract_table_factor(&self, factor: &TableFactor) -> String {
         match factor {
             TableFactor::Table { name, .. } => name.to_string(),
-            _ => "unknown".to_string(),
+            // Subqueries, CTEs, and other non-plain table references are not
+            // valid targets for INSERT/UPDATE/DELETE in MySQL. Return a sentinel
+            // that will never match allow_write or lock_down, causing the
+            // fail-closed default to block the query.
+            _ => "__unknown_table_factor__".to_string(),
         }
+    }
+
+    /// Recursively extract all table names referenced in a query's FROM clause,
+    /// including subqueries. Used to detect policy-evasion via nested SELECTs.
+    fn extract_all_tables_from_factor(&self, factor: &TableFactor) -> Vec<String> {
+        match factor {
+            TableFactor::Table { name, .. } => vec![name.to_string()],
+            TableFactor::Derived { subquery, .. } => {
+                self.extract_tables_from_query(subquery)
+            }
+            TableFactor::NestedJoin { table_with_joins, .. } => {
+                let mut tables = self.extract_all_tables_from_factor(&table_with_joins.relation);
+                for join in &table_with_joins.joins {
+                    tables.extend(self.extract_all_tables_from_factor(&join.relation));
+                }
+                tables
+            }
+            _ => vec![],
+        }
+    }
+
+    /// Extract all table names from a SELECT query (including subqueries in FROM)
+    fn extract_tables_from_query(&self, query: &sqlparser::ast::Query) -> Vec<String> {
+        let mut tables = Vec::new();
+        if let sqlparser::ast::SetExpr::Select(select) = query.body.as_ref() {
+            for from in &select.from {
+                tables.extend(self.extract_all_tables_from_factor(&from.relation));
+                for join in &from.joins {
+                    tables.extend(self.extract_all_tables_from_factor(&join.relation));
+                }
+            }
+        }
+        tables
     }
 }
 
@@ -193,6 +231,56 @@ mod tests {
     fn test_insert_to_users_blocked() {
         let engine = PolicyEngine::new(DatabasePolicy::default());
         let result = engine.analyze("INSERT INTO wp_users (user_login) VALUES ('hacker')");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_unknown_table_blocked_fail_closed() {
+        let engine = PolicyEngine::new(DatabasePolicy::default());
+        let result = engine.analyze("INSERT INTO wp_custom_table (col) VALUES ('test')").unwrap();
+        assert_eq!(result, QueryAction::Block);
+    }
+
+    #[test]
+    fn test_drop_always_blocked() {
+        let engine = PolicyEngine::new(DatabasePolicy::default());
+        let result = engine.analyze("DROP TABLE wp_comments").unwrap();
+        assert_eq!(result, QueryAction::Block);
+    }
+
+    #[test]
+    fn test_alter_always_blocked() {
+        let engine = PolicyEngine::new(DatabasePolicy::default());
+        let result = engine.analyze("ALTER TABLE wp_comments ADD COLUMN backdoor TEXT").unwrap();
+        assert_eq!(result, QueryAction::Block);
+    }
+
+    #[test]
+    fn test_exact_table_match_no_substring() {
+        // wp_comments_backdoor should NOT match wp_comments (exact match only)
+        let engine = PolicyEngine::new(DatabasePolicy::default());
+        let result = engine.analyze("INSERT INTO wp_comments_backdoor (col) VALUES ('test')").unwrap();
+        assert_eq!(result, QueryAction::Block);
+    }
+
+    #[test]
+    fn test_delete_from_comments_allowed() {
+        let engine = PolicyEngine::new(DatabasePolicy::default());
+        let result = engine.analyze("DELETE FROM wp_comments WHERE comment_id = 1").unwrap();
+        assert_eq!(result, QueryAction::Allow);
+    }
+
+    #[test]
+    fn test_update_comments_allowed() {
+        let engine = PolicyEngine::new(DatabasePolicy::default());
+        let result = engine.analyze("UPDATE wp_comments SET comment_content = 'edited' WHERE comment_id = 1").unwrap();
+        assert_eq!(result, QueryAction::Allow);
+    }
+
+    #[test]
+    fn test_update_users_blocked() {
+        let engine = PolicyEngine::new(DatabasePolicy::default());
+        let result = engine.analyze("UPDATE wp_users SET user_pass = 'hacked' WHERE ID = 1");
         assert!(result.is_err());
     }
 }

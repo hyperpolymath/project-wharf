@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# humanstxt.org
+
+/* TEAM */
+Lead: Jonathan D.A. Jewell
+Site: https://github.com/hyperpolymath
+Location: United Kingdom
+
+/* SITE */
+Software: Project Wharf — The Sovereign Web Hypervisor
+Standards: PMPL-1.0-or-later, RSR (Rhodium Standard Repository)
+Components: wharf-cli, yacht-agent, wharf-ebpf
+Languages: Rust, Nickel, PHP, Bash

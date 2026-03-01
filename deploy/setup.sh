@@ -96,20 +96,29 @@ fi
 # 4. Download WordPress (if site root is empty)
 echo "[4/5] Checking WordPress installation..."
 if [ ! -f "$WHARF_ROOT/sites/$DOMAIN/html/wp-config.php" ]; then
+    # Require database password to be set — never ship with a default
+    if [ -z "${WORDPRESS_DB_PASSWORD:-}" ]; then
+        echo "  ERROR: WORDPRESS_DB_PASSWORD environment variable is not set."
+        echo "  Set it before running setup:"
+        echo "    export WORDPRESS_DB_PASSWORD=\"\$(openssl rand -base64 32)\""
+        echo "  Refusing to create wp-config.php with an insecure default."
+        exit 1
+    fi
+
     echo "  No WordPress found. Downloading..."
     curl -sL https://wordpress.org/latest.tar.gz | tar xz -C /tmp/
     cp -r /tmp/wordpress/* "$WHARF_ROOT/sites/$DOMAIN/html/"
     rm -rf /tmp/wordpress
 
     # Write wp-config.php pointing DB through the yacht-agent proxy
-    cat > "$WHARF_ROOT/sites/$DOMAIN/html/wp-config.php" << 'WPEOF'
+    cat > "$WHARF_ROOT/sites/$DOMAIN/html/wp-config.php" << WPEOF
 <?php
 // SPDX-License-Identifier: GPL-2.0-or-later
 // WordPress configuration — DB routed through yacht-agent proxy
 
 define('DB_NAME', 'wordpress');
 define('DB_USER', 'wordpress');
-define('DB_PASSWORD', getenv('WORDPRESS_DB_PASSWORD') ?: 'changeme');
+define('DB_PASSWORD', '${WORDPRESS_DB_PASSWORD}');
 define('DB_HOST', 'agent:3306');  // Yacht-agent proxy, NOT direct DB
 define('DB_CHARSET', 'utf8mb4');
 define('DB_COLLATE', '');
@@ -135,7 +144,7 @@ if (!defined('ABSPATH')) {
 require_once ABSPATH . 'wp-settings.php';
 WPEOF
 
-    echo "  WordPress downloaded and configured"
+    echo "  WordPress downloaded and configured (DB password injected from env)"
     echo "  IMPORTANT: Edit wp-config.php and add real security keys!"
 else
     echo "  WordPress already installed"
@@ -159,11 +168,10 @@ echo "======================================"
 echo ""
 echo "  Next steps:"
 echo "  1. Edit $WHARF_ROOT/config/yacht-agent.toml if needed"
-echo "  2. Set DB password: export WORDPRESS_DB_PASSWORD=<your-password>"
-echo "  3. Start the stack: selur-compose -f infra/selur-compose.yaml up -d"
+echo "  2. Start the stack: selur-compose -f infra/selur-compose.yaml up -d"
 echo "     (or: podman compose -f infra/selur-compose.yaml up -d)"
-echo "  4. Visit http://$DOMAIN:8080 to finish WordPress setup"
-echo "  5. From your local machine: wharf moor $DOMAIN"
+echo "  3. Visit http://$DOMAIN:8080 to finish WordPress setup"
+echo "  4. From your local machine: wharf moor $DOMAIN"
 echo ""
 echo "  Monitoring:"
 echo "    Health: curl http://localhost:9001/health"
