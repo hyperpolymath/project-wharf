@@ -100,3 +100,8 @@ seal-images:
 # Run the demo script
 demo:
     bash scripts/demo.sh
+
+# [AUTO-GENERATED] Multi-arch / RISC-V target
+build-riscv:
+	@echo "Building for RISC-V..."
+	cross build --target riscv64gc-unknown-linux-gnu
