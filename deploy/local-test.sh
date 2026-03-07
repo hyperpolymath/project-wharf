@@ -39,10 +39,10 @@ echo "  $LOCAL_DIR/{html,db} created"
 echo "[2/7] Checking WordPress..."
 if [ ! -f "$HTML_DIR/wp-includes/version.php" ]; then
     echo "  Downloading WordPress..."
-    curl -sL https://wordpress.org/latest.tar.gz -o /tmp/wordpress-latest.tar.gz
-    tar xzf /tmp/wordpress-latest.tar.gz -C /tmp/
-    cp -a /tmp/wordpress/* "$HTML_DIR/"
-    rm -rf /tmp/wordpress /tmp/wordpress-latest.tar.gz
+    curl -sL https://wordpress.org/latest.tar.gz -o "$HYPATIA_TMPDIR/wordpress"-latest.tar.gz
+    tar xzf "$HYPATIA_TMPDIR/wordpress"-latest.tar.gz -C /tmp/
+    cp -a "$HYPATIA_TMPDIR/wordpress"/* "$HTML_DIR/"
+    rm -rf "$HYPATIA_TMPDIR/wordpress" "$HYPATIA_TMPDIR/wordpress"-latest.tar.gz
     echo "  WordPress downloaded"
 else
     echo "  WordPress already present"
