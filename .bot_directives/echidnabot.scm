@@ -3,5 +3,5 @@
   (bot "echidnabot")
   (scope "formal verification and fuzzing")
   (allow ("analysis" "fuzzing" "proof checks"))
-  (deny ("write to core modules" "write to bindings"))
-  (notes "May open findings; code changes require explicit approval"))
+  (deny ("write to crypto module" "write to mooring protocol"))
+  (notes "May open findings; code changes to crypto.rs or mooring.rs require explicit approval"))

@@ -3,21 +3,17 @@
 #
 # Yacht Agent Container for Project Wharf
 # ========================================
-# TRUE DISTROLESS — No shell, no libc, no attack surface.
-# Just the statically-linked Rust binary.
+# Minimal runtime — Wolfi-base with glibc for the Rust binary.
 #
 # Build: podman build -t yacht-agent:latest -f infra/containers/Containerfile.agent .
 # Run:   podman run -d -p 3306:3306 -p 9001:9001 yacht-agent:latest
 
 # -----------------------------------------------------------------------------
-# Stage 1: Build the Rust binary (fully static with musl)
+# Stage 1: Build the Rust binary (glibc)
 # -----------------------------------------------------------------------------
 FROM cgr.dev/chainguard/wolfi-base:latest AS builder
 
-RUN apk add --no-cache rust cargo musl-dev openssl-dev pkgconf gcc
-
-# Add musl target for fully static binary
-RUN rustup target add x86_64-unknown-linux-musl
+RUN apk add --no-cache rust pkgconf openssl-dev gcc glibc-dev
 
 WORKDIR /build
 
@@ -30,27 +26,23 @@ COPY bin/wharf-cli ./bin/wharf-cli
 RUN mkdir -p xtask/src && echo 'fn main() {}' > xtask/src/main.rs
 COPY xtask/Cargo.toml xtask/Cargo.toml
 
-# Build release binary with static linking for musl
-ENV RUSTFLAGS="-C target-feature=+crt-static -C link-self-contained=yes"
-ENV OPENSSL_STATIC=1
-
-RUN cargo build --release --bin yacht-agent --target x86_64-unknown-linux-musl
+RUN cargo build --release --bin yacht-agent
 
 # Strip the binary for smaller size
-RUN strip target/x86_64-unknown-linux-musl/release/yacht-agent
+RUN strip target/release/yacht-agent
 
 # -----------------------------------------------------------------------------
-# Stage 2: TRUE DISTROLESS — Chainguard static image
+# Stage 2: Minimal runtime — Wolfi-base (glibc required)
 # -----------------------------------------------------------------------------
-FROM cgr.dev/chainguard/static:latest
+FROM cgr.dev/chainguard/wolfi-base:latest
 
 LABEL org.opencontainers.image.title="Yacht Agent"
 LABEL org.opencontainers.image.description="Database proxy and security enforcer for Project Wharf"
 LABEL org.opencontainers.image.vendor="Hyperpolymath"
 LABEL org.opencontainers.image.source="https://gitlab.com/hyperpolymath/wharf"
 
-# Copy the static binary
-COPY --from=builder /build/target/x86_64-unknown-linux-musl/release/yacht-agent /yacht-agent
+# Copy the binary
+COPY --from=builder /build/target/release/yacht-agent /yacht-agent
 
 # Database proxy port (masquerade as MySQL)
 EXPOSE 3306

@@ -167,12 +167,12 @@ if [ "$BUILD" = true ]; then
     log_info "Test 5: Quick container run test..."
 
     # Create a simple test
-    mkdir -p /tmp/wharf-test
-    echo '<?php phpinfo(); ?>' > /tmp/wharf-test/index.php
-    echo '<html><body><h1>Wharf Test</h1></body></html>' > /tmp/wharf-test/index.html
+    mkdir -p "$HYPATIA_TMPDIR/wharf-test"
+    echo '<?php phpinfo(); ?>' > "$HYPATIA_TMPDIR/wharf-test"/index.php
+    echo '<html><body><h1>Wharf Test</h1></body></html>' > "$HYPATIA_TMPDIR/wharf-test"/index.html
 
     # Try to start nginx container briefly
-    CONTAINER_ID=$(podman run -d --rm -p 18080:8080 -v /tmp/wharf-test:/var/www/html:ro yacht-nginx:test 2>/dev/null || echo "")
+    CONTAINER_ID=$(podman run -d --rm -p 18080:8080 -v "$HYPATIA_TMPDIR/wharf-test":/var/www/html:ro yacht-nginx:test 2>/dev/null || echo "")
 
     if [ -n "$CONTAINER_ID" ]; then
         sleep 2
@@ -197,7 +197,7 @@ if [ "$BUILD" = true ]; then
         fail_test "Failed to start nginx container"
     fi
 
-    rm -rf /tmp/wharf-test
+    rm -rf "$HYPATIA_TMPDIR/wharf-test"
 fi
 
 # =============================================================================

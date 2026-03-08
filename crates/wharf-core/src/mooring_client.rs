@@ -6,9 +6,11 @@
 //! HTTP client for Wharf CLI to communicate with yacht-agent's mooring API.
 //! Handles the full mooring lifecycle: init → verify → rsync → commit.
 
+use std::time::Duration;
+
 use crate::crypto::{
-    sign_hybrid, serialize_signature, serialize_public_key,
-    hybrid_public_key, HybridKeypair,
+    sign_with_scheme, serialize_signature, serialize_public_key,
+    hybrid_public_key, HybridKeypair, SignatureScheme,
 };
 use crate::mooring::{
     self, AbortRequest, AbortResponse, CommitRequest, CommitResponse,
@@ -40,6 +42,7 @@ pub struct MooringClient {
     base_url: String,
     keypair: HybridKeypair,
     pubkey_json: String,
+    scheme: SignatureScheme,
 }
 
 impl MooringClient {
@@ -47,14 +50,27 @@ impl MooringClient {
     ///
     /// `base_url` should be like `http://192.168.1.10:9001`
     pub fn new(base_url: &str, keypair: HybridKeypair) -> Self {
+        Self::with_scheme(base_url, keypair, SignatureScheme::default())
+    }
+
+    /// Create a new mooring client with an explicit signature scheme
+    pub fn with_scheme(base_url: &str, keypair: HybridKeypair, scheme: SignatureScheme) -> Self {
         let pubkey = hybrid_public_key(&keypair);
         let pubkey_json = serialize_public_key(&pubkey);
 
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
+            .pool_max_idle_per_host(2)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+
         Self {
-            client: reqwest::Client::new(),
+            client,
             base_url: base_url.trim_end_matches('/').to_string(),
             keypair,
             pubkey_json,
+            scheme,
         }
     }
 
@@ -82,7 +98,7 @@ impl MooringClient {
 
         // Sign the canonical bytes
         let canonical = canonical_init_bytes(&request);
-        let sig = sign_hybrid(&self.keypair, &canonical);
+        let sig = sign_with_scheme(&self.keypair, &canonical, self.scheme);
         request.signature = serialize_signature(&sig);
 
         let resp = self
@@ -95,7 +111,7 @@ impl MooringClient {
         let body: serde_json::Value = resp.json().await?;
 
         // Check for error response
-        if let Some(error) = body.get("error") {
+        if let Some(error) = body.get("error").filter(|v| !v.is_null()) {
             return Err(MooringClientError::YachtError(
                 error.as_str().unwrap_or("unknown error").to_string(),
             ));
@@ -124,7 +140,7 @@ impl MooringClient {
 
         // Sign
         let canonical = canonical_verify_bytes(&request);
-        let sig = sign_hybrid(&self.keypair, &canonical);
+        let sig = sign_with_scheme(&self.keypair, &canonical, self.scheme);
         request.signature = serialize_signature(&sig);
 
         let resp = self
@@ -136,7 +152,7 @@ impl MooringClient {
 
         let body: serde_json::Value = resp.json().await?;
 
-        if let Some(error) = body.get("error") {
+        if let Some(error) = body.get("error").filter(|v| !v.is_null()) {
             return Err(MooringClientError::YachtError(
                 error.as_str().unwrap_or("unknown error").to_string(),
             ));
@@ -163,7 +179,7 @@ impl MooringClient {
 
         // Sign
         let canonical = canonical_commit_bytes(&request);
-        let sig = sign_hybrid(&self.keypair, &canonical);
+        let sig = sign_with_scheme(&self.keypair, &canonical, self.scheme);
         request.signature = serialize_signature(&sig);
 
         let resp = self
@@ -175,7 +191,7 @@ impl MooringClient {
 
         let body: serde_json::Value = resp.json().await?;
 
-        if let Some(error) = body.get("error") {
+        if let Some(error) = body.get("error").filter(|v| !v.is_null()) {
             return Err(MooringClientError::YachtError(
                 error.as_str().unwrap_or("unknown error").to_string(),
             ));
@@ -202,7 +218,7 @@ impl MooringClient {
 
         // Sign
         let canonical = canonical_abort_bytes(&request);
-        let sig = sign_hybrid(&self.keypair, &canonical);
+        let sig = sign_with_scheme(&self.keypair, &canonical, self.scheme);
         request.signature = serialize_signature(&sig);
 
         let resp = self
@@ -214,7 +230,7 @@ impl MooringClient {
 
         let body: serde_json::Value = resp.json().await?;
 
-        if let Some(error) = body.get("error") {
+        if let Some(error) = body.get("error").filter(|v| !v.is_null()) {
             return Err(MooringClientError::YachtError(
                 error.as_str().unwrap_or("unknown error").to_string(),
             ));
