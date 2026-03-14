@@ -1,34 +1,34 @@
-= wharf - Citation Guide
+= project-wharf - Citation Guide
 :toc:
 
 == BibTeX
 
 [source,bibtex]
 ----
-@software{wharf_2025,
-  author = {Polymath, Hyper},
-  title = {wharf},
-  year = {2025},
-  url = {https://github.com/hyperpolymath/wharf},
-license = "PMPL-1.0"
+@software{project_wharf_2026,
+  author = {Jewell, Jonathan D.A.},
+  title = {project-wharf},
+  year = {2026},
+  url = {https://github.com/hyperpolymath/project-wharf},
+  license = {PMPL-1.0-or-later}
 }
 ----
 
 == Harvard Style
 
-Polymath, H. (2025) _wharf_ [Computer software]. Available at: https://github.com/hyperpolymath/wharf
+Jewell, J.D.A. (2026) _project-wharf_ [Computer software]. Available at: https://github.com/hyperpolymath/project-wharf
 
 == OSCOLA
 
-Hyper Polymath, 'wharf' (2025) <https://github.com/hyperpolymath/wharf>
+Jonathan D.A. Jewell, 'project-wharf' (2026) <https://github.com/hyperpolymath/project-wharf>
 
 == MLA
 
-Polymath, Hyper. "wharf." 2025, github.com/hyperpolymath/wharf.
+Jewell, Jonathan D.A. "project-wharf." 2026, github.com/hyperpolymath/project-wharf.
 
 == APA 7
 
-Polymath, H. (2025). _wharf_ [Computer software]. GitHub. https://github.com/hyperpolymath/wharf
+Jewell, J.D.A. (2026). _project-wharf_ [Computer software]. GitHub. https://github.com/hyperpolymath/project-wharf
 
 == See Also
 

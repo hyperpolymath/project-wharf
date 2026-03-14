@@ -60,7 +60,7 @@ Crypto:: ML-DSA-87 (FIPS 204 post-quantum) signatures on all control plane opera
 If you find a vulnerability:
 
 1. **Do NOT exploit it beyond proof-of-concept**
-2. Email: `jonathan.jewell@open.ac.uk` with subject "Wharf Security Finding"
+2. Email: `j.d.a.jewell@open.ac.uk` with subject "Wharf Security Finding"
 3. Include: steps to reproduce, impact assessment, suggested fix (if any)
 4. We'll acknowledge within 48 hours
 
