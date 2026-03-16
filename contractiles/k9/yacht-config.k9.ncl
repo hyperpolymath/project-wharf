@@ -19,7 +19,7 @@ K9!
       name = "yacht-agent-config",
       version = "1.0.0",
       description = "Yacht Agent runtime configuration for Project Wharf",
-      author = "Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>",
+      author = "Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>",
     },
   },
 

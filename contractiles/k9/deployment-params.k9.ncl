@@ -19,7 +19,7 @@ K9!
       name = "wharf-deployment-params",
       version = "1.0.0",
       description = "Validated deployment parameters for Project Wharf stack",
-      author = "Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>",
+      author = "Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>",
     },
   },
 

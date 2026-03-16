@@ -20,7 +20,7 @@ K9!
       name = "deploy-wharf",
       version = "1.0.0",
       description = "Deploy Project Wharf stack (yacht-agent + nginx + database)",
-      author = "Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>",
+      author = "Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>",
     },
     warnings = [
       "This component creates directories and starts containers",
