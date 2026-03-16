@@ -20,6 +20,7 @@
 //! - If it crashes, the site goes offline (better than being hacked)
 //! - Only signed commands from the Wharf are accepted
 
+#![forbid(unsafe_code)]
 use std::net::SocketAddr;
 use std::sync::Arc;
 

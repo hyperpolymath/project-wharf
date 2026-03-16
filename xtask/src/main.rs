@@ -7,6 +7,7 @@
 //! - Building the eBPF XDP firewall
 //! - Installing the compiled eBPF object file
 
+#![forbid(unsafe_code)]
 use std::path::PathBuf;
 use std::process::Command;
 

@@ -15,6 +15,7 @@
 //! - `wharf gen-keys` - Generate cryptographic keys (DKIM, SSH, TLS)
 //! - `wharf db` - Database configuration commands
 
+#![forbid(unsafe_code)]
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 use tracing::{info, Level};
