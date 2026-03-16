@@ -16,7 +16,7 @@
 | **JavaScript** | Only where ReScript cannot | MCP protocol glue, Deno APIs |
 | **Python** | SaltStack only | No other Python permitted |
 | **Nickel** | Configuration language | For complex configs |
-| **Guile Scheme** | State/meta files | STATE.scm, META.scm, ECOSYSTEM.scm |
+| **Guile Scheme** | State/meta files | .machine_readable/6a2/STATE.a2ml, .machine_readable/6a2/META.a2ml, .machine_readable/6a2/ECOSYSTEM.a2ml |
 | **Julia** | Batch scripts, data processing | Per RSR |
 | **OCaml** | AffineScript compiler | Language-specific |
 | **Ada** | Safety-critical systems | Where required |
