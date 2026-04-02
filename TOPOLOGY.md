@@ -1,6 +1,8 @@
 <!-- SPDX-License-Identifier: PMPL-1.0-or-later -->
 # TOPOLOGY.md - Project Wharf
 
+> NOTE (2026-03-30): Read this dashboard as an architectural tracking view, not as a release gate by itself. For current blockers and deployment posture, use `ROADMAP.adoc` as the authoritative readiness document.
+
 ## System Architecture
 
 ```

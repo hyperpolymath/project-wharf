@@ -14,10 +14,10 @@
 //! - **Immutable (Red)**: Read-only, writes blocked unless from Wharf (e.g., wp_users, wp_options)
 //! - **Hybrid (Grey)**: Conditional based on specific columns/values (e.g., transient caches in wp_options)
 
+use serde::{Deserialize, Serialize};
 use sqlparser::ast::{Statement, TableFactor};
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::Parser;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -110,6 +110,9 @@ impl PolicyEngine {
 
         for statement in ast {
             match &statement {
+                Statement::Query(_) => {
+                    continue;
+                }
                 Statement::Insert { table_name, .. } => {
                     let table = table_name.to_string();
                     return self.check_write_permission(&table);
@@ -132,8 +135,14 @@ impl PolicyEngine {
                     // ALTER is always blocked from the yacht
                     return Ok(QueryAction::Block);
                 }
-                // SELECT and other read operations are always allowed
-                _ => {}
+                _ => {
+                    if self.is_safe_session_or_read_query(sql) {
+                        continue;
+                    }
+
+                    // Fail closed for anything we do not explicitly understand.
+                    return Ok(QueryAction::Block);
+                }
             }
         }
 
@@ -145,12 +154,22 @@ impl PolicyEngine {
         let normalized = table.trim_matches('`').to_lowercase();
 
         // Check if explicitly allowed (exact match, not substring)
-        if self.policy.allow_write.iter().any(|t| normalized == t.to_lowercase()) {
+        if self
+            .policy
+            .allow_write
+            .iter()
+            .any(|t| normalized == t.to_lowercase())
+        {
             return Ok(QueryAction::Allow);
         }
 
         // Check if explicitly locked (exact match, not substring)
-        if self.policy.lock_down.iter().any(|t| normalized == t.to_lowercase()) {
+        if self
+            .policy
+            .lock_down
+            .iter()
+            .any(|t| normalized == t.to_lowercase())
+        {
             return Err(PolicyError::ImmutableTableViolation { table: normalized });
         }
 
@@ -180,10 +199,10 @@ impl PolicyEngine {
     fn extract_all_tables_from_factor(&self, factor: &TableFactor) -> Vec<String> {
         match factor {
             TableFactor::Table { name, .. } => vec![name.to_string()],
-            TableFactor::Derived { subquery, .. } => {
-                self.extract_tables_from_query(subquery)
-            }
-            TableFactor::NestedJoin { table_with_joins, .. } => {
+            TableFactor::Derived { subquery, .. } => self.extract_tables_from_query(subquery),
+            TableFactor::NestedJoin {
+                table_with_joins, ..
+            } => {
                 let mut tables = self.extract_all_tables_from_factor(&table_with_joins.relation);
                 for join in &table_with_joins.joins {
                     tables.extend(self.extract_all_tables_from_factor(&join.relation));
@@ -207,6 +226,29 @@ impl PolicyEngine {
         }
         tables
     }
+
+    fn is_safe_session_or_read_query(&self, sql: &str) -> bool {
+        let normalized = sql.trim_start().to_uppercase();
+        let safe_prefixes = [
+            "SELECT ",
+            "WITH ",
+            "SHOW ",
+            "DESCRIBE ",
+            "DESC ",
+            "EXPLAIN ",
+            "SET NAMES ",
+            "SET CHARACTER SET ",
+            "SET SESSION ",
+            "START TRANSACTION",
+            "BEGIN",
+            "COMMIT",
+            "ROLLBACK",
+        ];
+
+        safe_prefixes
+            .iter()
+            .any(|prefix| normalized.starts_with(prefix))
+    }
 }
 
 #[cfg(test)]
@@ -223,7 +265,9 @@ mod tests {
     #[test]
     fn test_insert_to_comments_allowed() {
         let engine = PolicyEngine::new(DatabasePolicy::default());
-        let result = engine.analyze("INSERT INTO wp_comments (comment_content) VALUES ('test')").unwrap();
+        let result = engine
+            .analyze("INSERT INTO wp_comments (comment_content) VALUES ('test')")
+            .unwrap();
         assert_eq!(result, QueryAction::Allow);
     }
 
@@ -237,7 +281,9 @@ mod tests {
     #[test]
     fn test_unknown_table_blocked_fail_closed() {
         let engine = PolicyEngine::new(DatabasePolicy::default());
-        let result = engine.analyze("INSERT INTO wp_custom_table (col) VALUES ('test')").unwrap();
+        let result = engine
+            .analyze("INSERT INTO wp_custom_table (col) VALUES ('test')")
+            .unwrap();
         assert_eq!(result, QueryAction::Block);
     }
 
@@ -251,29 +297,51 @@ mod tests {
     #[test]
     fn test_alter_always_blocked() {
         let engine = PolicyEngine::new(DatabasePolicy::default());
-        let result = engine.analyze("ALTER TABLE wp_comments ADD COLUMN backdoor TEXT").unwrap();
+        let result = engine
+            .analyze("ALTER TABLE wp_comments ADD COLUMN backdoor TEXT")
+            .unwrap();
         assert_eq!(result, QueryAction::Block);
+    }
+
+    #[test]
+    fn test_truncate_blocked_fail_closed() {
+        let engine = PolicyEngine::new(DatabasePolicy::default());
+        let result = engine.analyze("TRUNCATE TABLE wp_posts").unwrap();
+        assert_eq!(result, QueryAction::Block);
+    }
+
+    #[test]
+    fn test_session_queries_allowed() {
+        let engine = PolicyEngine::new(DatabasePolicy::default());
+        let result = engine.analyze("SET NAMES utf8mb4").unwrap();
+        assert_eq!(result, QueryAction::Allow);
     }
 
     #[test]
     fn test_exact_table_match_no_substring() {
         // wp_comments_backdoor should NOT match wp_comments (exact match only)
         let engine = PolicyEngine::new(DatabasePolicy::default());
-        let result = engine.analyze("INSERT INTO wp_comments_backdoor (col) VALUES ('test')").unwrap();
+        let result = engine
+            .analyze("INSERT INTO wp_comments_backdoor (col) VALUES ('test')")
+            .unwrap();
         assert_eq!(result, QueryAction::Block);
     }
 
     #[test]
     fn test_delete_from_comments_allowed() {
         let engine = PolicyEngine::new(DatabasePolicy::default());
-        let result = engine.analyze("DELETE FROM wp_comments WHERE comment_id = 1").unwrap();
+        let result = engine
+            .analyze("DELETE FROM wp_comments WHERE comment_id = 1")
+            .unwrap();
         assert_eq!(result, QueryAction::Allow);
     }
 
     #[test]
     fn test_update_comments_allowed() {
         let engine = PolicyEngine::new(DatabasePolicy::default());
-        let result = engine.analyze("UPDATE wp_comments SET comment_content = 'edited' WHERE comment_id = 1").unwrap();
+        let result = engine
+            .analyze("UPDATE wp_comments SET comment_content = 'edited' WHERE comment_id = 1")
+            .unwrap();
         assert_eq!(result, QueryAction::Allow);
     }
 

@@ -1,0 +1,29 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+= Project Wharf Roadmap
+
+== Current Status
+
+Project Wharf is the strongest architectural core in this portfolio, but it should be judged by trusted-core rigor rather than by broad completion percentages.
+
+* The offline-controller / online-runtime split is coherent and strategically strong.
+* The database policy engine, integrity path, and mooring model are the highest-value differentiators.
+* The release story still depends on deeper fail-closed verification and clearer crypto-release posture.
+
+== P0 Release Blockers
+
+* [ ] Prove and test fail-closed handling for unrecognized or administrative SQL statements across the DB policy path.
+* [ ] Expand database-policy tests beyond smoke coverage so the trusted core is exercised more realistically.
+* [ ] Resolve the Ed448 audit dependency or standardize deployment guidance around the audited ML-DSA-only path.
+* [ ] Reconcile the 95%-complete style language with the thin current test surface.
+
+== P1 Hardening Work
+
+* [ ] Add load, fault-injection, and concurrency testing for mooring, integrity verification, and DB proxying.
+* [ ] Add explicit release criteria for the trusted core.
+* [ ] Publish a tighter operator guide for what is supported, experimental, or crypto-audit dependent.
+
+== P2 Productization
+
+* [ ] Treat Wharf as the backbone of the live stack once the trusted core is proven.
+* [ ] Use WordPress deployments as real operational validation instead of broad architectural percentages.
+* [ ] Keep the scope centered on runtime hardening rather than accumulating adjacent infrastructure features too early.

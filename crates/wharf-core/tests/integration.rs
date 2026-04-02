@@ -9,8 +9,8 @@ use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
-use wharf_core::fleet::{Fleet, Yacht, Adapter};
-use wharf_core::integrity::{generate_manifest, verify_manifest, save_manifest, load_manifest};
+use wharf_core::fleet::{Adapter, Fleet, Yacht};
+use wharf_core::integrity::{generate_manifest, load_manifest, save_manifest, verify_manifest};
 
 /// Test fleet configuration management
 #[test]
@@ -165,7 +165,10 @@ fn test_manifest_verification_clean() {
 
     // Verify - should pass
     let result = verify_manifest(&site_dir, &manifest, false).expect("Verification failed");
-    assert!(result.is_ok(), "Verification should pass for unmodified files");
+    assert!(
+        result.is_ok(),
+        "Verification should pass for unmodified files"
+    );
     assert_eq!(result.passed.len(), 2);
     assert!(result.mismatched.is_empty());
     assert!(result.missing.is_empty());
@@ -189,9 +192,15 @@ fn test_manifest_verification_modified() {
 
     // Verify - should detect modification
     let result = verify_manifest(&site_dir, &manifest, false).expect("Verification failed");
-    assert!(!result.is_ok(), "Verification should fail for modified files");
+    assert!(
+        !result.is_ok(),
+        "Verification should fail for modified files"
+    );
     assert_eq!(result.mismatched.len(), 1);
-    assert!(result.mismatched.iter().any(|(path, _, _)| path == "config.php"));
+    assert!(result
+        .mismatched
+        .iter()
+        .any(|(path, _, _)| path == "config.php"));
 }
 
 /// Test manifest verification - missing file
@@ -213,7 +222,10 @@ fn test_manifest_verification_missing() {
 
     // Verify - should detect missing
     let result = verify_manifest(&site_dir, &manifest, false).expect("Verification failed");
-    assert!(!result.is_ok(), "Verification should fail for missing files");
+    assert!(
+        !result.is_ok(),
+        "Verification should fail for missing files"
+    );
     assert_eq!(result.missing.len(), 1);
     assert!(result.missing.contains(&"delete.php".to_string()));
 }
@@ -236,7 +248,10 @@ fn test_manifest_verification_unexpected() {
 
     // Verify - should detect unexpected
     let result = verify_manifest(&site_dir, &manifest, false).expect("Verification failed");
-    assert!(!result.is_ok(), "Verification should fail for unexpected files");
+    assert!(
+        !result.is_ok(),
+        "Verification should fail for unexpected files"
+    );
     assert_eq!(result.unexpected.len(), 1);
     assert!(result.unexpected.contains(&"backdoor.php".to_string()));
 }
@@ -295,7 +310,12 @@ fn test_db_proxy_legitimate_selects() {
 
     for q in &legit_queries {
         let result = engine.analyze(q).unwrap();
-        assert_eq!(result, QueryAction::Allow, "Legitimate SELECT blocked: {}", q);
+        assert_eq!(
+            result,
+            QueryAction::Allow,
+            "Legitimate SELECT blocked: {}",
+            q
+        );
     }
 }
 
@@ -314,7 +334,12 @@ fn test_db_proxy_mutable_writes_allowed() {
 
     for q in &allowed_writes {
         let result = engine.analyze(q).unwrap();
-        assert_eq!(result, QueryAction::Allow, "Mutable table write blocked: {}", q);
+        assert_eq!(
+            result,
+            QueryAction::Allow,
+            "Mutable table write blocked: {}",
+            q
+        );
     }
 }
 
@@ -354,7 +379,7 @@ fn test_db_proxy_ddl_always_blocked() {
     let ddl_attacks = [
         "DROP TABLE wp_users",
         "DROP TABLE wp_posts",
-        "DROP TABLE wp_comments",  // Even mutable tables can't be dropped
+        "DROP TABLE wp_comments", // Even mutable tables can't be dropped
         "ALTER TABLE wp_users ADD COLUMN backdoor VARCHAR(255)",
     ];
 
@@ -365,8 +390,10 @@ fn test_db_proxy_ddl_always_blocked() {
 
     // Some ALTER variants cause parse errors — also acceptable (blocks the query)
     let result = engine.analyze("ALTER TABLE wp_options MODIFY COLUMN option_value LONGTEXT");
-    assert!(result.is_err() || result.unwrap() == QueryAction::Block,
-        "ALTER MODIFY should be blocked or rejected");
+    assert!(
+        result.is_err() || result.unwrap() == QueryAction::Block,
+        "ALTER MODIFY should be blocked or rejected"
+    );
 }
 
 /// Classic SQL injection patterns are caught by the AST parser
@@ -392,8 +419,12 @@ fn test_db_proxy_sqli_patterns_caught() {
             Ok(action) => {
                 // If it parsed, the dangerous part should be blocked
                 // Note: sqlparser may parse stacked queries differently
-                assert_ne!(action, wharf_core::db_policy::QueryAction::Allow,
-                    "SQLi pattern allowed through: {}", q);
+                assert_ne!(
+                    action,
+                    wharf_core::db_policy::QueryAction::Allow,
+                    "SQLi pattern allowed through: {}",
+                    q
+                );
             }
             Err(_) => {
                 // Parse error is also acceptable — malformed SQL is rejected
@@ -409,25 +440,15 @@ fn test_db_proxy_truncate_blocked() {
 
     let engine = PolicyEngine::new(DatabasePolicy::default());
 
-    // TRUNCATE might parse as a Statement variant the engine doesn't whitelist,
-    // so it falls through to the default (Allow for unknown statements).
-    // This test documents current behavior — in production, default should be Block.
-    let result = engine.analyze("TRUNCATE TABLE wp_posts");
-    // If the parser handles TRUNCATE, it should be blocked or audited
-    if let Ok(action) = result {
-        // Currently unknown statements fall through to Allow
-        // TODO: Change default to Block for fail-closed production mode
-        assert!(action == QueryAction::Allow || action == QueryAction::Block || action == QueryAction::Audit,
-            "Unexpected action for TRUNCATE: {:?}", action);
-    }
-    // Parse error is also fine
+    let result = engine.analyze("TRUNCATE TABLE wp_posts").unwrap();
+    assert_eq!(result, QueryAction::Block, "TRUNCATE must fail closed");
 }
 
 /// Test sync config excludes
 #[test]
 fn test_sync_excludes() {
-    use wharf_core::sync::SyncConfig;
     use std::path::PathBuf;
+    use wharf_core::sync::SyncConfig;
 
     let config = SyncConfig {
         source: PathBuf::from("/local/site"),
