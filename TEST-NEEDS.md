@@ -1,5 +1,7 @@
 # TEST-NEEDS.md - Project Wharf Testing State
 
+## CRG Grade: C — ACHIEVED 2026-04-04
+
 **CRG Target:** C (unit + smoke + build + P2P + E2E + reflexive + contract + aspect tests + benchmarks baselined)
 
 **Last Updated:** 2026-04-04  

@@ -28,24 +28,24 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Cache panic-attacker binary
+      - name: Cache panic-attack binary
         id: cache-pa
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
         with:
-          path: ~/.cargo/bin/panic-attacker
-          key: panic-attacker-${{ runner.os }}
+          path: ~/.cargo/bin/panic-attack
+          key: panic-attack-${{ runner.os }}
 
-      - name: Build panic-attacker
+      - name: Build panic-attack
         if: steps.cache-pa.outputs.cache-hit != 'true'
         run: |
           git clone https://github.com/hyperpolymath/panic-attacker.git /tmp/panic-attacker
           cd /tmp/panic-attacker
           cargo build --release
-          cp target/release/panic-attacker ~/.cargo/bin/
+          cp target/release/panic-attack ~/.cargo/bin/
 
       - name: Run panic-attack assail
         run: |
-          panic-attacker assail . --output /tmp/scan-results.json
+          panic-attack assail . --output /tmp/scan-results.json
           echo "## Panic-Attack Scan Results" >> $GITHUB_STEP_SUMMARY
           WEAK_POINTS=$(jq '.weak_points | length' /tmp/scan-results.json 2>/dev/null || echo 0)
           echo "- Weak points found: $WEAK_POINTS" >> $GITHUB_STEP_SUMMARY
