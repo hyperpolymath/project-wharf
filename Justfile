@@ -46,7 +46,7 @@ clean:
 
 # Run the project
 run *ARGS:
-    cargo run -- {{ARGS}}
+    cargo run -p wharf-cli -- {{ARGS}}
 
 # Generate docs
 doc:

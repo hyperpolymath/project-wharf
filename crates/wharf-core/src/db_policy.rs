@@ -196,6 +196,7 @@ impl PolicyEngine {
 
     /// Recursively extract all table names referenced in a query's FROM clause,
     /// including subqueries. Used to detect policy-evasion via nested SELECTs.
+    #[allow(dead_code)]
     fn extract_all_tables_from_factor(&self, factor: &TableFactor) -> Vec<String> {
         match factor {
             TableFactor::Table { name, .. } => vec![name.to_string()],
@@ -214,6 +215,7 @@ impl PolicyEngine {
     }
 
     /// Extract all table names from a SELECT query (including subqueries in FROM)
+    #[allow(dead_code)]
     fn extract_tables_from_query(&self, query: &sqlparser::ast::Query) -> Vec<String> {
         let mut tables = Vec::new();
         if let sqlparser::ast::SetExpr::Select(select) = query.body.as_ref() {

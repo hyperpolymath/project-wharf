@@ -90,3 +90,9 @@ aya = "0.12"
 
 # Date/Time
 chrono = "0.4"
+
+# Testing
+criterion = "0.5"
+proptest = "1.4"
+assert_cmd = "2.0"
+predicates = "3.1"

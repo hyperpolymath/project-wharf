@@ -39,3 +39,7 @@ reqwest = { workspace = true }
 
 # Crypto utilities
 hex = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = { workspace = true }
+predicates = { workspace = true }

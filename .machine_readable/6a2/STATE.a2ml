@@ -5,10 +5,43 @@
 [metadata]
 project = "project-wharf"
 version = "0.1.0"
-last-updated = "2026-03-15"
+last-updated = "2026-04-04"
 status = "active"
+crg-target = "C"
 
 [project-context]
 name = "project-wharf"
-completion-percentage = 0
-phase = "In development"
+completion-percentage = 100
+phase = "Testing & Quality (CRG C achieved)"
+
+[testing-summary]
+unit-tests = 49
+integration-tests = 19
+smoke-tests = 10
+contract-tests = 10
+property-tests = 11
+security-aspect-tests = 15
+agent-tests = 4
+total-tests = 118
+benchmarks = 6
+benchmark-baseline-established = true
+
+[recent-session]
+date = "2026-04-04"
+work-completed = """
+Blitzed project-wharf to CRG C testing standard:
+1. Created 5 new test suites (118 tests total from initial 72)
+2. Added Criterion benchmarks with baseline (6 benchmarks)
+3. Implemented property tests for invariants (11 tests)
+4. Added comprehensive security aspect tests (15 tests)
+5. Created contract/invariant tests (10 tests)
+6. Added CLI smoke tests (10 tests)
+7. All tests passing: cargo test --workspace
+8. Benchmarks ready: cargo bench -p wharf-core --bench wharf_bench
+"""
+
+[next-actions]
+- Integrate TEST-NEEDS.md into CI/CD pipeline
+- Monitor benchmark baseline for performance regressions
+- Consider adding fuzzing targets for parser edge cases
+- Expand E2E tests for yacht-agent lifecycle (optional for CRG C)
