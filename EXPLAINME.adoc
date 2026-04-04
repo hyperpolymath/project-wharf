@@ -1,24 +1,212 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
-= Project Wharf — Show Me The Receipts
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= Project Wharf — Sovereign Web Hypervisor — Show Me The Receipts
 :toc:
 :icons: font
 
-The README makes claims. This file backs them up.
+The README makes claims. This file backs them up. Wharf separates CMS
+administration (the Wharf controller, offline) from the live site runtime (the
+Yacht) using a Zero Trust mesh network (the Mooring). The core philosophy is
+the quote: "The gun should not be in the safe."
+
+== Claim: AST-aware database proxy that blocks writes to immutable tables
 
 [quote, README]
 ____
-The gun should not be in the safe.
+The Yacht Agent acts as a SQL proxy, parsing queries using an Abstract Syntax
+Tree (via sqlparser 0.39, not regex!) to enforce security policies.
+Mutable Tables (Blue Zone): content like comments — allowed to write.
+Immutable Tables (Red Zone): config like users and plugins — blocked unless
+from Wharf.
+INSERT INTO wp_users blocked: "Policy violation: write to immutable table wp_users"
 ____
 
-== Technology Choices
+The database proxy lives in `crates/wharf-core/src/db_policy.rs`. It intercepts
+MySQL connections on `127.0.0.1:3307`, parses every incoming SQL statement with
+the `sqlparser` crate (v0.39, AST-based, not regex), and evaluates each parsed
+statement against the policy table loaded from
+`configs/policies/database.ncl` (Nickel). A write to a Red Zone table returns a
+policy-violation error immediately; the statement never reaches MariaDB. A write
+to a Blue Zone table passes through. Hybrid (Grey Zone) tables like `wp_options`
+are evaluated by row-level conditional rules. The WordPress adapter
+(`adapters/wordpress/db.php`) routes all WordPress DB calls through
+`127.0.0.1:3307` transparently.
+
+**Caveat:** The proxy handles MySQL wire protocol only. PostgreSQL sites
+(e.g., Drupal on Postgres) require a separate adapter not yet implemented.
+The `sqlparser` crate parses standard SQL; vendor-specific MySQL extensions
+(e.g., `INSERT IGNORE ... ON DUPLICATE KEY UPDATE`) are handled but
+complex stored procedures may require additional pattern registration.
+
+- DB proxy: `crates/wharf-core/src/db_policy.rs`
+- Policy config: `configs/policies/database.ncl`
+- WordPress adapter: `adapters/wordpress/db.php`
+- WordPress dashboard plugin: `adapters/wordpress-wharf/`
+
+== Claim: Post-quantum hybrid signatures on all mooring protocol traffic
+
+[quote, README]
+____
+Both the Wharf CLI and Yacht Agent persist their Ed448 + ML-DSA-87 hybrid
+keypairs to disk. All mooring requests and responses carry hybrid signatures —
+both must verify. An attacker must break both algorithms (quantum or classical)
+to forge a signature.
+____
+
+The mooring protocol is implemented in `crates/wharf-core/src/mooring.rs`
+and `mooring_client.rs`. All `INIT` and `COMMIT` phase requests carry two
+independent signatures: one Ed448 (classical elliptic curve) and one ML-DSA-87
+(FIPS 204 post-quantum lattice). The Yacht's `verify_mooring_request()` checks
+both — either signature failing causes the entire request to be rejected.
+Key material is stored in a custom binary format (`WHRF` magic + version +
+length-prefixed key) at `~/.wharf/keys/wharf.key` (Wharf CLI) and
+`/etc/wharf/keys/yacht.key` (Yacht Agent), both mode `0600`. File integrity
+during sync uses BLAKE3 manifests (`crates/wharf-core/src/integrity.rs`).
+Key derivation for password-encrypted offline storage uses HKDF-SHAKE512 +
+XChaCha20-Poly1305. The default signature scheme is `ml-dsa-87-only`
+(pure post-quantum) until the ed448-goldilocks library completes external audit;
+hybrid mode is available via `--signature-scheme hybrid`.
+
+**Caveat:** The `ml-dsa-87-only` default is recommended for production; the
+hybrid mode has a dependency (`ed448-goldilocks`) that has not yet had a
+third-party security audit. The FIDO2 emergency override path is designed
+but requires a physical FIDO2 device and `libfido2` at runtime.
+
+- Mooring protocol: `crates/wharf-core/src/mooring.rs`
+- Crypto primitives: `crates/wharf-core/src/crypto.rs`
+- Integrity (BLAKE3): `crates/wharf-core/src/integrity.rs`
+- Nebula mesh: `crates/wharf-core/src/nebula.rs`
+
+== Dogfooded Across The Account
 
 [cols="1,2"]
 |===
-| Technology | Learn More
+| Technology | Also Used In
 
-| **Rust** | https://www.rust-lang.org
+| **Rust (multi-crate workspace)** | https://github.com/hyperpolymath/neurophone[neurophone],
+  https://github.com/hyperpolymath/protocol-squisher[protocol-squisher],
+  https://github.com/hyperpolymath/ephapax[ephapax],
+  https://github.com/hyperpolymath/burble[burble]
+| **Nickel configuration language** | https://github.com/hyperpolymath/bofig[bofig],
+  https://github.com/hyperpolymath/awesome-nickel[awesome-nickel],
+  https://github.com/hyperpolymath/nafa-app[nafa-app] (nickel-rituals),
+  https://github.com/hyperpolymath/developer-ecosystem[developer-ecosystem]
+| **Chainguard base images / Containerfile** | Container policy applied
+  account-wide; see https://github.com/hyperpolymath/burble[burble],
+  https://github.com/hyperpolymath/stapeln[stapeln],
+  https://github.com/hyperpolymath/neurophone[neurophone]
+| **Selur-compose / Vordr runtime** | https://github.com/hyperpolymath/stapeln[stapeln],
+  https://github.com/hyperpolymath/burble[burble] and other deployed services
+| **eBPF for kernel-level enforcement** | `crates/wharf-ebpf/` XDP firewall;
+  eBPF patterns also appear in https://github.com/hyperpolymath/svalinn[svalinn]
 |===
 
-== Questions?
+== File Map
 
-Open an issue or reach out directly — happy to explain anything in more detail.
+[cols="1,3"]
+|===
+| Path | What's There
+
+| `crates/wharf-core/src/mooring.rs`
+| Mooring protocol types, `MooringError`, protocol version constants, phase
+  definitions (INIT / VERIFY / RSYNC / COMMIT). Session state machine.
+
+| `crates/wharf-core/src/mooring_client.rs`
+| HTTP client for the Wharf CLI side. 30-second request timeout,
+  10-second connect timeout, connection pooling (2 idle per host).
+  Sends hybrid-signed INIT, per-layer VERIFY, and COMMIT requests.
+
+| `crates/wharf-core/src/crypto.rs`
+| Ed448 + ML-DSA-87 key generation, signing, verification. HKDF-SHAKE512 KDF.
+  XChaCha20-Poly1305 AEAD. Argon2id (512 MiB / 8 iter / 4 lanes) for
+  password-based key protection.
+
+| `crates/wharf-core/src/integrity.rs`
+| BLAKE3 filesystem manifest generation and verification. Detects mismatched,
+  missing, and unexpected files during mooring verify phase.
+
+| `crates/wharf-core/src/db_policy.rs`
+| MySQL proxy with sqlparser AST evaluation. Red/Blue/Grey zone classification.
+  Policy loaded from Nickel config.
+
+| `crates/wharf-core/src/nebula.rs`
+| Full Nebula overlay mesh management: CA key generation, certificate signing,
+  IP allocation, revocation. Admin ports invisible to public internet.
+
+| `crates/wharf-core/src/fleet.rs`
+| Fleet configuration types. Maps Wharf Yacht definitions from Nickel config.
+
+| `crates/wharf-core/src/sync.rs`
+| rsync-based file transfer for the RSYNC mooring phase. Delta-only transfers.
+
+| `crates/wharf-ebpf/src/main.rs`
+| eBPF XDP program loader. Kernel-level packet filtering. Falls back to
+  nftables when `CAP_BPF` is unavailable.
+
+| `adapters/wordpress/db.php`
+| WordPress DB drop-in. Routes all `wpdb` calls through `127.0.0.1:3307`
+  (Yacht Agent proxy). Zero security logic in PHP — all enforcement in Rust.
+
+| `adapters/wordpress-wharf/`
+| WordPress dashboard plugin (GPL-2.0). Dashboard widget: allowed/blocked
+  query counts, firewall mode, signature scheme. Admin bar indicator.
+  30-second transient caching.
+
+| `configs/fleet.ncl`
+| Nickel: declare your Yacht targets.
+
+| `configs/policies/database.ncl`
+| Nickel: Red/Blue/Grey zone table classification rules.
+
+| `configs/policies/airlock.ncl`
+| Nickel: HTTP header strip/inject rules for the header airlock.
+
+| `configs/policies/filesystem.ncl`
+| Nickel: immutable/writable/ephemeral path classifications.
+
+| `configs/policies/network.ncl`
+| Nickel: Nebula mesh and firewall rules.
+
+| `infra/selur-compose.yaml`
+| Selur-compose orchestration. Builder (wolfi-base), runtime agent (static),
+  nginx (hardened), MariaDB — all Chainguard images.
+
+| `deploy/`
+| Deployment guide and `setup.sh` (5-minute Podman quick start).
+
+| `docs/wharf-architecture.png`
+| Architecture diagram referenced in README header.
+
+| `docs/HACK-ME-CHALLENGE.adoc`
+| Security research challenge: documented attack surface for researchers.
+
+| `Justfile`
+| Build recipes: `init`, `build`, `moor`, `audit`, `gen-nebula-ca`,
+  `gen-yacht-cert`, `gen-email-records`, `container-build`, `deploy-selur`.
+
+| `.machine_readable/6a2/`
+| A2ML checkpoint files: STATE, META, ECOSYSTEM, AGENTIC, NEUROSYM, PLAYBOOK.
+|===
+
+== Checking It
+
+[source,bash]
+----
+# Build all crates
+just build
+
+# Run tests
+just test
+
+# Lint and format check
+just lint && just fmt-check
+
+# Generate Nebula CA (offline, for Wharf controller)
+just gen-nebula-ca
+
+# Deploy Yacht Agent to server
+just deploy-yacht
+
+# Container build
+just container-build
+----
