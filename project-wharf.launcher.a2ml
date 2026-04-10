@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# project-wharf.launcher.a2ml — per-app launcher config for Project Wharf.
+
+[project]
+name         = "project-wharf"
+display      = "Project Wharf"
+description  = "Project Wharf — container/workload staging and orchestration"
+categories   = ["Development", "System"]
+version      = "1.0.0"
+license      = "PMPL-1.0-or-later"
+
+[repo]
+path = "/var/mnt/eclipse/repos/project-wharf"
+
+[runtime]
+kind    = "process"
+command = [
+    "/home/hyper/Desktop/Repo-Projects/launchers/repo-quicklaunch.sh",
+    "/var/mnt/eclipse/repos/project-wharf",
+    "Project Wharf",
+    "just",
+    "tour",
+]
+pid-file = "/tmp/project-wharf.pid"
+log-file = "/tmp/project-wharf.log"
+
+[icon]
+source = "{repo-dir}/assets/icon-256.png"
