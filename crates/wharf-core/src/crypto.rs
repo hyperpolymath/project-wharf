@@ -231,7 +231,7 @@ pub fn deserialize_keypair_raw(data: &[u8]) -> Result<HybridKeypair, CryptoError
     }
 
     // Verify version
-    let version = u32::from_le_bytes(data[4..8].try_into().unwrap());
+    let version = u32::from_le_bytes(data[4..8].try_into().expect("TODO: handle error"));
     if version != KEYPAIR_VERSION {
         return Err(CryptoError::SerializationError(
             format!("Unsupported keypair version: {} (expected {})", version, KEYPAIR_VERSION),
@@ -256,7 +256,7 @@ pub fn deserialize_keypair_raw(data: &[u8]) -> Result<HybridKeypair, CryptoError
     if data.len() < offset + 4 {
         return Err(CryptoError::SerializationError("Truncated ML-DSA-87 secret key length".to_string()));
     }
-    let mldsa_sk_len = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
+    let mldsa_sk_len = u32::from_le_bytes(data[offset..offset + 4].try_into().expect("TODO: handle error")) as usize;
     offset += 4;
 
     if data.len() < offset + mldsa_sk_len {
@@ -269,7 +269,7 @@ pub fn deserialize_keypair_raw(data: &[u8]) -> Result<HybridKeypair, CryptoError
     if data.len() < offset + 4 {
         return Err(CryptoError::SerializationError("Truncated ML-DSA-87 public key length".to_string()));
     }
-    let mldsa_pk_len = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
+    let mldsa_pk_len = u32::from_le_bytes(data[offset..offset + 4].try_into().expect("TODO: handle error")) as usize;
     offset += 4;
 
     if data.len() < offset + mldsa_pk_len {
@@ -344,7 +344,7 @@ pub fn deserialize_keypair(data: &[u8], password: &[u8]) -> Result<HybridKeypair
     }
 
     // Verify version
-    let version = u32::from_le_bytes(data[4..8].try_into().unwrap());
+    let version = u32::from_le_bytes(data[4..8].try_into().expect("TODO: handle error"));
     if version != KEYPAIR_VERSION {
         return Err(CryptoError::SerializationError(
             format!("Unsupported keypair version: {}", version),
@@ -697,7 +697,7 @@ mod tests {
 
     #[test]
     fn test_hybrid_keypair_generation() {
-        let keypair = generate_hybrid_keypair().unwrap();
+        let keypair = generate_hybrid_keypair().expect("TODO: handle error");
         let pubkey = hybrid_public_key(&keypair);
         assert!(!pubkey.ed448.is_empty());
         assert!(!pubkey.mldsa87.is_empty());
@@ -705,7 +705,7 @@ mod tests {
 
     #[test]
     fn test_hybrid_sign_verify() {
-        let keypair = generate_hybrid_keypair().unwrap();
+        let keypair = generate_hybrid_keypair().expect("TODO: handle error");
         let pubkey = hybrid_public_key(&keypair);
         let message = b"test message for hybrid signing";
 
@@ -714,12 +714,12 @@ mod tests {
         assert!(!sig.mldsa87_sig.is_empty());
 
         // Full hybrid verification should succeed
-        verify_hybrid(&pubkey, message, &sig).unwrap();
+        verify_hybrid(&pubkey, message, &sig).expect("TODO: handle error");
     }
 
     #[test]
     fn test_hybrid_verify_wrong_message() {
-        let keypair = generate_hybrid_keypair().unwrap();
+        let keypair = generate_hybrid_keypair().expect("TODO: handle error");
         let pubkey = hybrid_public_key(&keypair);
 
         let sig = sign_hybrid(&keypair, b"original message");
@@ -734,10 +734,10 @@ mod tests {
         let nonce = secure_random_bytes(24);
         let plaintext = b"secret message";
 
-        let ciphertext = encrypt_xchacha20(&key, &nonce, plaintext).unwrap();
+        let ciphertext = encrypt_xchacha20(&key, &nonce, plaintext).expect("TODO: handle error");
         assert_ne!(&ciphertext, plaintext);
 
-        let decrypted = decrypt_xchacha20(&key, &nonce, &ciphertext).unwrap();
+        let decrypted = decrypt_xchacha20(&key, &nonce, &ciphertext).expect("TODO: handle error");
         assert_eq!(&decrypted, plaintext);
     }
 
@@ -747,7 +747,7 @@ mod tests {
         let wrong_key = secure_random_bytes(32);
         let nonce = secure_random_bytes(24);
 
-        let ciphertext = encrypt_xchacha20(&key, &nonce, b"secret").unwrap();
+        let ciphertext = encrypt_xchacha20(&key, &nonce, b"secret").expect("TODO: handle error");
         assert!(decrypt_xchacha20(&wrong_key, &nonce, &ciphertext).is_err());
     }
 
@@ -757,15 +757,15 @@ mod tests {
         let salt = b"optional salt";
         let info = b"context info";
 
-        let key1 = derive_key_hkdf_sha3_256(ikm, Some(salt), info).unwrap();
+        let key1 = derive_key_hkdf_sha3_256(ikm, Some(salt), info).expect("TODO: handle error");
         assert_eq!(key1.len(), 32);
 
         // Same inputs should produce same output
-        let key2 = derive_key_hkdf_sha3_256(ikm, Some(salt), info).unwrap();
+        let key2 = derive_key_hkdf_sha3_256(ikm, Some(salt), info).expect("TODO: handle error");
         assert_eq!(key1, key2);
 
         // Different info should produce different output
-        let key3 = derive_key_hkdf_sha3_256(ikm, Some(salt), b"different").unwrap();
+        let key3 = derive_key_hkdf_sha3_256(ikm, Some(salt), b"different").expect("TODO: handle error");
         assert_ne!(key1, key3);
     }
 
@@ -784,7 +784,7 @@ mod tests {
             mldsa87_sig: vec![4, 5, 6],
         };
         let json = serialize_signature(&sig);
-        let deserialized = deserialize_signature(&json).unwrap();
+        let deserialized = deserialize_signature(&json).expect("TODO: handle error");
         assert_eq!(deserialized.ed448_sig, sig.ed448_sig);
         assert_eq!(deserialized.mldsa87_sig, sig.mldsa87_sig);
     }
@@ -796,18 +796,18 @@ mod tests {
             mldsa87: vec![40, 50, 60],
         };
         let json = serialize_public_key(&pk);
-        let deserialized = deserialize_public_key(&json).unwrap();
+        let deserialized = deserialize_public_key(&json).expect("TODO: handle error");
         assert_eq!(deserialized.ed448, pk.ed448);
         assert_eq!(deserialized.mldsa87, pk.mldsa87);
     }
 
     #[test]
     fn test_keypair_serialization_roundtrip() {
-        let keypair = generate_hybrid_keypair().unwrap();
+        let keypair = generate_hybrid_keypair().expect("TODO: handle error");
         let pubkey_before = hybrid_public_key(&keypair);
 
-        let data = serialize_keypair_raw(&keypair).unwrap();
-        let restored = deserialize_keypair_raw(&data).unwrap();
+        let data = serialize_keypair_raw(&keypair).expect("TODO: handle error");
+        let restored = deserialize_keypair_raw(&data).expect("TODO: handle error");
         let pubkey_after = hybrid_public_key(&restored);
 
         // Public keys must match
@@ -817,17 +817,17 @@ mod tests {
         // Sign with restored key, verify with original pubkey
         let msg = b"roundtrip test message";
         let sig = sign_hybrid(&restored, msg);
-        verify_hybrid(&pubkey_before, msg, &sig).unwrap();
+        verify_hybrid(&pubkey_before, msg, &sig).expect("TODO: handle error");
     }
 
     #[test]
     fn test_keypair_encrypted_roundtrip() {
-        let keypair = generate_hybrid_keypair().unwrap();
+        let keypair = generate_hybrid_keypair().expect("TODO: handle error");
         let pubkey_before = hybrid_public_key(&keypair);
         let password = b"test-password-wharf";
 
-        let encrypted = serialize_keypair(&keypair, password).unwrap();
-        let restored = deserialize_keypair(&encrypted, password).unwrap();
+        let encrypted = serialize_keypair(&keypair, password).expect("TODO: handle error");
+        let restored = deserialize_keypair(&encrypted, password).expect("TODO: handle error");
         let pubkey_after = hybrid_public_key(&restored);
 
         assert_eq!(pubkey_before.ed448, pubkey_after.ed448);
@@ -836,13 +836,13 @@ mod tests {
         // Verify signing still works
         let msg = b"encrypted roundtrip";
         let sig = sign_hybrid(&restored, msg);
-        verify_hybrid(&pubkey_before, msg, &sig).unwrap();
+        verify_hybrid(&pubkey_before, msg, &sig).expect("TODO: handle error");
     }
 
     #[test]
     fn test_keypair_wrong_password() {
-        let keypair = generate_hybrid_keypair().unwrap();
-        let encrypted = serialize_keypair(&keypair, b"correct").unwrap();
+        let keypair = generate_hybrid_keypair().expect("TODO: handle error");
+        let encrypted = serialize_keypair(&keypair, b"correct").expect("TODO: handle error");
 
         // Wrong password should fail decryption
         assert!(deserialize_keypair(&encrypted, b"wrong").is_err());
@@ -850,7 +850,7 @@ mod tests {
 
     #[test]
     fn test_mldsa87_only_sign_verify() {
-        let keypair = generate_hybrid_keypair().unwrap();
+        let keypair = generate_hybrid_keypair().expect("TODO: handle error");
         let pubkey = hybrid_public_key(&keypair);
         let msg = b"mldsa87-only test message";
 
@@ -860,12 +860,12 @@ mod tests {
         assert!(!sig.mldsa87_sig.is_empty());
 
         // Verification with same scheme should succeed
-        verify_with_scheme(&pubkey, msg, &sig, SignatureScheme::MlDsa87Only).unwrap();
+        verify_with_scheme(&pubkey, msg, &sig, SignatureScheme::MlDsa87Only).expect("TODO: handle error");
     }
 
     #[test]
     fn test_mldsa87_only_wrong_message() {
-        let keypair = generate_hybrid_keypair().unwrap();
+        let keypair = generate_hybrid_keypair().expect("TODO: handle error");
         let pubkey = hybrid_public_key(&keypair);
         let sig = sign_with_scheme(&keypair, b"original", SignatureScheme::MlDsa87Only);
         assert!(verify_with_scheme(&pubkey, b"tampered", &sig, SignatureScheme::MlDsa87Only).is_err());
@@ -873,7 +873,7 @@ mod tests {
 
     #[test]
     fn test_hybrid_scheme_sign_verify() {
-        let keypair = generate_hybrid_keypair().unwrap();
+        let keypair = generate_hybrid_keypair().expect("TODO: handle error");
         let pubkey = hybrid_public_key(&keypair);
         let msg = b"hybrid scheme test";
 
@@ -882,7 +882,7 @@ mod tests {
         assert!(!sig.ed448_sig.is_empty());
         assert!(!sig.mldsa87_sig.is_empty());
 
-        verify_with_scheme(&pubkey, msg, &sig, SignatureScheme::Hybrid).unwrap();
+        verify_with_scheme(&pubkey, msg, &sig, SignatureScheme::Hybrid).expect("TODO: handle error");
     }
 
     #[test]
@@ -892,18 +892,18 @@ mod tests {
 
     #[test]
     fn test_keypair_persistence() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = tempfile::tempdir().expect("TODO: handle error");
         let key_path = dir.path().join("test.key");
 
         // Generate, serialize, write
-        let keypair = generate_hybrid_keypair().unwrap();
+        let keypair = generate_hybrid_keypair().expect("TODO: handle error");
         let pubkey_original = hybrid_public_key(&keypair);
-        let data = serialize_keypair_raw(&keypair).unwrap();
-        std::fs::write(&key_path, &data).unwrap();
+        let data = serialize_keypair_raw(&keypair).expect("TODO: handle error");
+        std::fs::write(&key_path, &data).expect("TODO: handle error");
 
         // Read, deserialize, verify
-        let loaded_data = std::fs::read(&key_path).unwrap();
-        let restored = deserialize_keypair_raw(&loaded_data).unwrap();
+        let loaded_data = std::fs::read(&key_path).expect("TODO: handle error");
+        let restored = deserialize_keypair_raw(&loaded_data).expect("TODO: handle error");
         let pubkey_restored = hybrid_public_key(&restored);
 
         assert_eq!(pubkey_original.ed448, pubkey_restored.ed448);
@@ -912,6 +912,6 @@ mod tests {
         // Sign → verify across the persistence boundary
         let msg = b"persistence test";
         let sig = sign_hybrid(&restored, msg);
-        verify_hybrid(&pubkey_original, msg, &sig).unwrap();
+        verify_hybrid(&pubkey_original, msg, &sig).expect("TODO: handle error");
     }
 }

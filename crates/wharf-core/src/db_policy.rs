@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn test_select_allowed() {
         let engine = PolicyEngine::new(DatabasePolicy::default());
-        let result = engine.analyze("SELECT * FROM wp_users").unwrap();
+        let result = engine.analyze("SELECT * FROM wp_users").expect("TODO: handle error");
         assert_eq!(result, QueryAction::Allow);
     }
 
@@ -269,7 +269,7 @@ mod tests {
         let engine = PolicyEngine::new(DatabasePolicy::default());
         let result = engine
             .analyze("INSERT INTO wp_comments (comment_content) VALUES ('test')")
-            .unwrap();
+            .expect("TODO: handle error");
         assert_eq!(result, QueryAction::Allow);
     }
 
@@ -285,14 +285,14 @@ mod tests {
         let engine = PolicyEngine::new(DatabasePolicy::default());
         let result = engine
             .analyze("INSERT INTO wp_custom_table (col) VALUES ('test')")
-            .unwrap();
+            .expect("TODO: handle error");
         assert_eq!(result, QueryAction::Block);
     }
 
     #[test]
     fn test_drop_always_blocked() {
         let engine = PolicyEngine::new(DatabasePolicy::default());
-        let result = engine.analyze("DROP TABLE wp_comments").unwrap();
+        let result = engine.analyze("DROP TABLE wp_comments").expect("TODO: handle error");
         assert_eq!(result, QueryAction::Block);
     }
 
@@ -301,21 +301,21 @@ mod tests {
         let engine = PolicyEngine::new(DatabasePolicy::default());
         let result = engine
             .analyze("ALTER TABLE wp_comments ADD COLUMN backdoor TEXT")
-            .unwrap();
+            .expect("TODO: handle error");
         assert_eq!(result, QueryAction::Block);
     }
 
     #[test]
     fn test_truncate_blocked_fail_closed() {
         let engine = PolicyEngine::new(DatabasePolicy::default());
-        let result = engine.analyze("TRUNCATE TABLE wp_posts").unwrap();
+        let result = engine.analyze("TRUNCATE TABLE wp_posts").expect("TODO: handle error");
         assert_eq!(result, QueryAction::Block);
     }
 
     #[test]
     fn test_session_queries_allowed() {
         let engine = PolicyEngine::new(DatabasePolicy::default());
-        let result = engine.analyze("SET NAMES utf8mb4").unwrap();
+        let result = engine.analyze("SET NAMES utf8mb4").expect("TODO: handle error");
         assert_eq!(result, QueryAction::Allow);
     }
 
@@ -325,7 +325,7 @@ mod tests {
         let engine = PolicyEngine::new(DatabasePolicy::default());
         let result = engine
             .analyze("INSERT INTO wp_comments_backdoor (col) VALUES ('test')")
-            .unwrap();
+            .expect("TODO: handle error");
         assert_eq!(result, QueryAction::Block);
     }
 
@@ -334,7 +334,7 @@ mod tests {
         let engine = PolicyEngine::new(DatabasePolicy::default());
         let result = engine
             .analyze("DELETE FROM wp_comments WHERE comment_id = 1")
-            .unwrap();
+            .expect("TODO: handle error");
         assert_eq!(result, QueryAction::Allow);
     }
 
@@ -343,7 +343,7 @@ mod tests {
         let engine = PolicyEngine::new(DatabasePolicy::default());
         let result = engine
             .analyze("UPDATE wp_comments SET comment_content = 'edited' WHERE comment_id = 1")
-            .unwrap();
+            .expect("TODO: handle error");
         assert_eq!(result, QueryAction::Allow);
     }
 

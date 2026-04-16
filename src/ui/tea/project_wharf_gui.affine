@@ -1,0 +1,105 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Project Wharf GUI — AffineScript TEA Interface
+// Underpinned by Cadre Router (Affine Stack Implementation)
+//
+// Purpose: Provide a formally verified, resource-safe interface for the
+// Project Wharf container orchestration platform (Inventory, Deployments, Orchestrator, Monitoring).
+//
+// Nature: AffineScript TEA loop where Model and Msg are consumed linearly
+// to ensure state transition integrity.
+
+// ── Wharf Panels ───────────────────────────────────────────────────────────
+
+enum WharfPanel {
+  Inventory,
+  Deployments,
+  Orchestrator,
+  Monitoring
+}
+
+// ── Model ───────────────────────────────────────────────────────────────────
+
+/**
+ * Project Wharf GUI Model.
+ * history_depth tracks the navigation stack size.
+ */
+struct Model {
+  current_panel: WharfPanel,
+  history_depth: Int
+}
+
+// ── Msg ──────────────────────────────────────────────────────────────────────
+
+enum Msg {
+  Navigate(WharfPanel),
+  PopState
+}
+
+// ── TEA Logic ────────────────────────────────────────────────────────────────
+
+/**
+ * Initial state: Inventory with no history.
+ */
+fn wharf_init() -> Model {
+  {
+    current_panel: WharfPanel::Inventory,
+    history_depth: 0
+  }
+}
+
+/**
+ * Affine TEA Update function.
+ * @linear annotations enforce that every state transition is accounted for.
+ * Underpinned by Cadre Router: navigation pushes current to stack.
+ */
+fn wharf_update(@linear msg: Msg, @linear model: Model) -> Model {
+  match model {
+    { current_panel: c, history_depth: h } => {
+      match msg {
+        Navigate(new_panel) => {
+          // Consume old model, produce new model with incremented history depth
+          { 
+            current_panel: new_panel, 
+            history_depth: h + 1 
+          }
+        }
+        
+        PopState => {
+          if h > 0 {
+            // Return to Inventory if stack has items
+            { 
+              current_panel: WharfPanel::Inventory, 
+              history_depth: h - 1 
+            }
+          } else {
+            // No-op transition: return model as-is
+            { 
+              current_panel: c, 
+              history_depth: 0 
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * View function: Renders the current panel name.
+ * Owned model prevents codegen errors with refs.
+ */
+fn wharf_view(model: Model) -> String {
+  match model.current_panel {
+    Inventory    => "WHARF INVENTORY (Containers)",
+    Deployments  => "WHARF DEPLOYMENTS (Active)",
+    Orchestrator => "WHARF ORCHESTRATOR (Scheduling)",
+    Monitoring   => "WHARF MONITORING (Health)"
+  }
+}
+
+/**
+ * Subscriptions function.
+ */
+fn wharf_subs(model: Model) -> String {
+  "None"
+}

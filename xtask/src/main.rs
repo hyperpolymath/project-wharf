@@ -64,7 +64,7 @@ fn workspace_root() -> Result<PathBuf> {
     let path = String::from_utf8(output.stdout)
         .context("Invalid UTF-8 in cargo output")?;
 
-    Ok(PathBuf::from(path.trim()).parent().unwrap().to_path_buf())
+    Ok(PathBuf::from(path.trim()).parent().expect("TODO: handle error").to_path_buf())
 }
 
 /// Build the eBPF XDP firewall
@@ -177,7 +177,7 @@ fn install_ebpf() -> Result<()> {
     // Copy the file (requires sudo)
     println!("Installing wharf-shield.o to /etc/wharf/ (requires sudo)...");
     let status = Command::new("sudo")
-        .args(["cp", src.to_str().unwrap(), dest.to_str().unwrap()])
+        .args(["cp", src.to_str().expect("TODO: handle error"), dest.to_str().expect("TODO: handle error")])
         .status()
         .context("Failed to copy eBPF object file")?;
 

@@ -944,7 +944,7 @@ mod tests {
     #[test]
     fn test_parse_cidr() {
         let config = NebulaNetworkConfig::default();
-        let (ip, prefix) = config.parse_cidr().unwrap();
+        let (ip, prefix) = config.parse_cidr().expect("TODO: handle error");
         assert_eq!(prefix, 16);
         assert_eq!(ip.to_string(), "10.42.0.0");
     }
@@ -952,9 +952,9 @@ mod tests {
     #[test]
     fn test_allocate_ip() {
         let config = NebulaNetworkConfig::default();
-        let ip0 = config.allocate_ip(0).unwrap();
-        let ip1 = config.allocate_ip(1).unwrap();
-        let ip2 = config.allocate_ip(2).unwrap();
+        let ip0 = config.allocate_ip(0).expect("TODO: handle error");
+        let ip1 = config.allocate_ip(1).expect("TODO: handle error");
+        let ip2 = config.allocate_ip(2).expect("TODO: handle error");
 
         assert_eq!(ip0, "10.42.0.10/16");
         assert_eq!(ip1, "10.42.0.11/16");
@@ -990,9 +990,9 @@ mod tests {
         let network = NebulaNetworkConfig::default();
         let mut store = NebulaCertStore::default();
 
-        let ip1 = store.get_or_allocate_ip("yacht-1", &network).unwrap();
-        let ip2 = store.get_or_allocate_ip("yacht-2", &network).unwrap();
-        let ip1_again = store.get_or_allocate_ip("yacht-1", &network).unwrap();
+        let ip1 = store.get_or_allocate_ip("yacht-1", &network).expect("TODO: handle error");
+        let ip2 = store.get_or_allocate_ip("yacht-2", &network).expect("TODO: handle error");
+        let ip1_again = store.get_or_allocate_ip("yacht-1", &network).expect("TODO: handle error");
 
         // First yacht gets first IP
         assert!(ip1.starts_with("10.42.0.10"));

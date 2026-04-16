@@ -541,8 +541,8 @@ mod tests {
             root_hash: "def456".to_string(),
         };
 
-        let json = serde_json::to_string(&manifest).unwrap();
-        let parsed: LayerManifest = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&manifest).expect("TODO: handle error");
+        let parsed: LayerManifest = serde_json::from_str(&json).expect("TODO: handle error");
         assert_eq!(parsed.file_count, 1);
         assert_eq!(parsed.total_size, 1024);
     }

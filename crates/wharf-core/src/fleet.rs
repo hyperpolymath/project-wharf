@@ -358,15 +358,15 @@ mod tests {
 
     #[test]
     fn test_fleet_save_load() {
-        let dir = tempdir().unwrap();
+        let dir = tempdir().expect("TODO: handle error");
         let path = dir.path().join("fleet.json");
 
         let mut fleet = Fleet::default();
         fleet.add_yacht(Yacht::new("test", "10.0.0.1", "test.com"));
 
-        fleet.save(&path).unwrap();
+        fleet.save(&path).expect("TODO: handle error");
 
-        let loaded = Fleet::load_json(&path).unwrap();
+        let loaded = Fleet::load_json(&path).expect("TODO: handle error");
         assert_eq!(loaded.yachts.len(), 1);
         assert!(loaded.get_yacht("test").is_some());
     }

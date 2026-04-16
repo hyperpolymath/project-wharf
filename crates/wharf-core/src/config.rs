@@ -459,7 +459,7 @@ mod tests {
     #[test]
     fn test_config_serialization() {
         let config = YachtAgentConfig::default();
-        let toml_str = toml::to_string(&config).unwrap();
+        let toml_str = toml::to_string(&config).expect("TODO: handle error");
         assert!(toml_str.contains("[db_proxy]"));
         assert!(toml_str.contains("protocol"));
     }

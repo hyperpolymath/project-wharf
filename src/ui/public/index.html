@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Wharf Orchestrator</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1c2c;
+            color: #ecf0f1;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #app {
+            background-color: #2c3e50;
+            border-radius: 8px;
+            padding: 30px;
+            width: 100%;
+            max-width: 600px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 1.2em;
+            border-left: 5px solid #3498db;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            width: 100%;
+            max-width: 600px;
+        }
+        button {
+            background-color: #34495e;
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        button:hover {
+            background-color: #3498db;
+            transform: translateY(-2px);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        #btn-back {
+            grid-column: span 2;
+            background-color: #e74c3c;
+        }
+        #btn-back:hover {
+            background-color: #c0392b;
+        }
+    </style>
+</head>
+<body>
+    <h1>PROJECT WHARF</h1>
+    <div id="app">Loading Orchestrator...</div>
+    
+    <div class="controls">
+        <button id="btn-inventory">Inventory</button>
+        <button id="btn-deployments">Deployments</button>
+        <button id="btn-orchestrator">Orchestrator</button>
+        <button id="btn-monitoring">Monitoring</button>
+        <button id="btn-back">Back / Previous State</button>
+    </div>
+
+    <script type="module">
+        import { load, Msg, WharfPanel } from '../tea/project_wharf_tea.js';
+
+        async function main() {
+            try {
+                const tea = await load('./assets/wasm/project_wharf_gui.wasm');
+                
+                // Initialise state
+                let currentModel = tea.init();
+                
+                const appDiv = document.getElementById('app');
+                
+                function render() {
+                    appDiv.textContent = tea.view(currentModel);
+                }
+
+                function dispatch(msg) {
+                    currentModel = tea.update(msg, currentModel);
+                    render();
+                }
+
+                document.getElementById('btn-inventory').addEventListener('click', () => dispatch(Msg.Navigate(WharfPanel.Inventory)));
+                document.getElementById('btn-deployments').addEventListener('click', () => dispatch(Msg.Navigate(WharfPanel.Deployments)));
+                document.getElementById('btn-orchestrator').addEventListener('click', () => dispatch(Msg.Navigate(WharfPanel.Orchestrator)));
+                document.getElementById('btn-monitoring').addEventListener('click', () => dispatch(Msg.Navigate(WharfPanel.Monitoring)));
+                document.getElementById('btn-back').addEventListener('click', () => dispatch(Msg.PopState()));
+
+                render();
+            } catch (err) {
+                console.error("Failed to load Wasm:", err);
+                document.getElementById('app').textContent = "Failed to load: " + err.message;
+            }
+        }
+
+        main();
+    </script>
+</body>
+</html>

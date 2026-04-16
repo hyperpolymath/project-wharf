@@ -493,39 +493,39 @@ mod tests {
 
     #[test]
     fn test_hash_file() {
-        let dir = tempdir().unwrap();
+        let dir = tempdir().expect("TODO: handle error");
         let file_path = dir.path().join("test.txt");
-        fs::write(&file_path, "Hello, World!").unwrap();
+        fs::write(&file_path, "Hello, World!").expect("TODO: handle error");
 
-        let hash = hash_file(&file_path).unwrap();
+        let hash = hash_file(&file_path).expect("TODO: handle error");
         assert!(!hash.is_empty());
         assert_eq!(hash.len(), 64); // BLAKE3 produces 256-bit (64 hex chars) hash
     }
 
     #[test]
     fn test_generate_and_verify_manifest() {
-        let dir = tempdir().unwrap();
+        let dir = tempdir().expect("TODO: handle error");
 
         // Create test files
-        fs::write(dir.path().join("file1.txt"), "content1").unwrap();
-        fs::create_dir(dir.path().join("subdir")).unwrap();
-        fs::write(dir.path().join("subdir/file2.txt"), "content2").unwrap();
+        fs::write(dir.path().join("file1.txt"), "content1").expect("TODO: handle error");
+        fs::create_dir(dir.path().join("subdir")).expect("TODO: handle error");
+        fs::write(dir.path().join("subdir/file2.txt"), "content2").expect("TODO: handle error");
 
         // Generate manifest
-        let manifest = generate_manifest(dir.path(), &[]).unwrap();
+        let manifest = generate_manifest(dir.path(), &[]).expect("TODO: handle error");
         assert_eq!(manifest.files.len(), 2);
         assert_eq!(manifest.directories.len(), 1);
 
         // Verify (should pass)
-        let result = verify_manifest(dir.path(), &manifest, false).unwrap();
+        let result = verify_manifest(dir.path(), &manifest, false).expect("TODO: handle error");
         assert!(result.is_ok());
         assert_eq!(result.passed.len(), 2);
 
         // Modify a file
-        fs::write(dir.path().join("file1.txt"), "modified").unwrap();
+        fs::write(dir.path().join("file1.txt"), "modified").expect("TODO: handle error");
 
         // Verify (should fail)
-        let result = verify_manifest(dir.path(), &manifest, false).unwrap();
+        let result = verify_manifest(dir.path(), &manifest, false).expect("TODO: handle error");
         assert!(!result.is_ok());
         assert_eq!(result.mismatched.len(), 1);
     }

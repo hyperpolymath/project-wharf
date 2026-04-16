@@ -877,7 +877,7 @@ async fn mooring_init(
         status: yacht_status,
     };
 
-    Json(serde_json::to_value(response).unwrap())
+    Json(serde_json::to_value(response).expect("TODO: handle error"))
 }
 
 /// Verify a layer against expected manifest
@@ -980,7 +980,7 @@ async fn mooring_verify(
         }
     };
 
-    Json(serde_json::to_value(response).unwrap())
+    Json(serde_json::to_value(response).expect("TODO: handle error"))
 }
 
 /// Commit transferred layers
@@ -1030,7 +1030,7 @@ async fn mooring_commit(
         error: None,
     };
 
-    Json(serde_json::to_value(response).unwrap())
+    Json(serde_json::to_value(response).expect("TODO: handle error"))
 }
 
 // =============================================================================
@@ -1348,10 +1348,10 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("Failed to bind test listener");
-        let addr = listener.local_addr().unwrap();
+        let addr = listener.local_addr().expect("TODO: handle error");
 
         tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
+            axum::serve(listener, app).await.expect("TODO: handle error");
         });
 
         // Give the server a moment to start
@@ -1416,11 +1416,11 @@ mod tests {
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
-            .unwrap();
-        let addr = listener.local_addr().unwrap();
+            .expect("TODO: handle error");
+        let addr = listener.local_addr().expect("TODO: handle error");
 
         tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
+            axum::serve(listener, app).await.expect("TODO: handle error");
         });
 
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -1430,7 +1430,7 @@ mod tests {
             .expect("health request failed");
 
         assert!(resp.status().is_success());
-        assert_eq!(resp.text().await.unwrap(), "OK");
+        assert_eq!(resp.text().await.expect("TODO: handle error"), "OK");
     }
 
     /// Test that metrics endpoint returns real counters
@@ -1446,11 +1446,11 @@ mod tests {
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
-            .unwrap();
-        let addr = listener.local_addr().unwrap();
+            .expect("TODO: handle error");
+        let addr = listener.local_addr().expect("TODO: handle error");
 
         tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
+            axum::serve(listener, app).await.expect("TODO: handle error");
         });
 
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -1459,7 +1459,7 @@ mod tests {
             .await
             .expect("metrics request failed");
 
-        let body = resp.text().await.unwrap();
+        let body = resp.text().await.expect("TODO: handle error");
         assert!(body.contains("yacht_queries_total{status=\"allowed\"} 42"));
         assert!(body.contains("yacht_queries_total{status=\"blocked\"} 3"));
     }
@@ -1478,11 +1478,11 @@ mod tests {
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
-            .unwrap();
-        let addr = listener.local_addr().unwrap();
+            .expect("TODO: handle error");
+        let addr = listener.local_addr().expect("TODO: handle error");
 
         tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
+            axum::serve(listener, app).await.expect("TODO: handle error");
         });
 
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -1491,7 +1491,7 @@ mod tests {
             .await
             .expect("stats request failed");
 
-        let body: serde_json::Value = resp.json().await.unwrap();
+        let body: serde_json::Value = resp.json().await.expect("TODO: handle error");
         assert_eq!(body["queries"]["allowed"], 10);
         assert_eq!(body["queries"]["blocked"], 5);
         assert_eq!(body["queries"]["audited"], 2);
