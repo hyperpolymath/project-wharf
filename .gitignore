@@ -45,3 +45,10 @@ logs/
 # Coverage reports
 tarpaulin-report.html
 coverage/
+target/
+node_modules/
+_build/
+deps/
+.elixir_ls/
+build/
+dist/
