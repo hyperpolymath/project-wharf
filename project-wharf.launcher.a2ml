@@ -17,7 +17,7 @@ path = "/var/mnt/eclipse/repos/project-wharf"
 [runtime]
 kind    = "process"
 command = [
-    "/home/hyper/Desktop/Project_Work/launchers/repo-quicklaunch.sh",
+    "/var/mnt/eclipse/repos/.desktop-tools/launchers/repo-quicklaunch.sh",
     "/var/mnt/eclipse/repos/project-wharf",
     "Project Wharf",
     "just",
