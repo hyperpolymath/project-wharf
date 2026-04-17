@@ -1,6 +1,6 @@
 
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: PMPL-1.0-or-later
 # Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 #
 # @a2ml-metadata begin
@@ -17,7 +17,7 @@
 #     "LM-LA-LIFECYCLE-STANDARD.adoc"
 #     "cross-platform-system-integration-modes"
 #   ]
-#   standard-spec-version = "0.1.0"
+#   standard-spec-version = "0.2.0"
 #   generator             = "launch-scaffolder"
 # )
 # @a2ml-metadata end
@@ -240,6 +240,16 @@ write_linux_desktop_file() {
     else
         icon_name="package-x-generic"
     fi
+
+    # keepopen.sh implements the standard fallback ladder: GUI → TUI →
+    # bash-at-repo-root. See launcher-standard.adoc §Fallback Ladder.
+    local keepopen="/var/mnt/eclipse/repos/.desktop-tools/keepopen.sh"
+    local gui_cmd tui_cmd
+# process: GUI = start then tail log so terminal stays open;
+    # TUI = just tail the existing log; Shell = repo root.
+    gui_cmd="$LAUNCHER_TARGET --start && tail -f $LOG_FILE"
+    tui_cmd="tail -n 200 -f $LOG_FILE"
+
     cat > "$target" <<EOF
 [Desktop Entry]
 Type=Application
@@ -247,9 +257,9 @@ Version=1.0
 Name=$APP_DISPLAY
 GenericName=$APP_GENERIC_NAME
 Comment=$APP_DESC
-Exec=$LAUNCHER_TARGET --start
+Exec=$keepopen "$APP_DISPLAY" "$REPO_DIR" "$gui_cmd" "$tui_cmd" "$LOG_FILE"
 Icon=$icon_name
-Terminal=false
+Terminal=true
 Categories=$APP_CATEGORIES
 StartupNotify=true
 StartupWMClass=$APP_NAME
