@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 #
 # project-wharf.launcher.a2ml — per-app launcher config for Project Wharf.
@@ -9,7 +9,7 @@ display      = "Project Wharf"
 description  = "Project Wharf — container/workload staging and orchestration"
 categories   = ["Development", "System"]
 version      = "1.0.0"
-license      = "PMPL-1.0-or-later"
+license      = "MPL-2.0"
 
 [repo]
 path = "/var/mnt/eclipse/repos/project-wharf"
