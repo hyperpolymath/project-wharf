@@ -62,7 +62,7 @@ None
 
 == Action Items
 
-* Add justfile
+* Add Justfile
 * Add Containerfile
 
 == References
