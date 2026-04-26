@@ -43,3 +43,6 @@ anyhow = { workspace = true }
 
 # eBPF Userspace Loader (optional - only used in ebpf mode)
 aya = { workspace = true }
+
+[dev-dependencies]
+reqwest = { workspace = true }

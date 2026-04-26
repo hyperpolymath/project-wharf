@@ -33,3 +33,9 @@ anyhow = { workspace = true }
 
 # Date/Time
 chrono = { workspace = true }
+
+# HTTP client (for mooring)
+reqwest = { workspace = true }
+
+# Crypto utilities
+hex = { workspace = true }

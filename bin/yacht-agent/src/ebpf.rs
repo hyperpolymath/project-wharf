@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: PMPL-1.0
 // SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
 
 //! # eBPF XDP Shield Loader
@@ -38,6 +38,7 @@ pub struct Shield {
     interface: String,
 }
 
+#[allow(dead_code)]
 impl Shield {
     /// Load and attach the eBPF XDP firewall
     ///
