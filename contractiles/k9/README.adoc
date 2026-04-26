@@ -1,0 +1,52 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+= K9 Contractiles — Project Wharf
+:toc: left
+:icons: font
+
+== Components
+
+=== Kennel Level (Pure Data)
+
+**File:** `yacht-config.k9.ncl`
+
+Yacht Agent runtime configuration. Contains port assignments, database policy
+allowlists, file integrity settings, and mooring protocol parameters.
+
+**Export:**
+[source,bash]
+----
+nickel export contractiles/k9/yacht-config.k9.ncl > yacht-agent.json
+----
+
+=== Yard Level (Validated Config)
+
+**File:** `deployment-params.k9.ncl`
+
+Deployment parameters with Nickel contracts ensuring:
+
+- Port numbers within valid range (1-65535)
+- Production environments must have metrics enabled
+- API port cannot conflict with listen port
+- eBPF mode requires nftables fallback
+
+**Validate:**
+[source,bash]
+----
+nickel typecheck contractiles/k9/deployment-params.k9.ncl
+nickel eval contractiles/k9/deployment-params.k9.ncl
+----
+
+=== Hunt Level (Full Execution)
+
+**File:** `deploy-wharf.k9.ncl`
+
+Full deployment automation: creates host directories, builds container images,
+starts the Wharf stack via selur-compose.
+
+**Run:**
+[source,bash]
+----
+./must --dry-run run contractiles/k9/deploy-wharf.k9.ncl
+./must verify contractiles/k9/deploy-wharf.k9.ncl
+./must run contractiles/k9/deploy-wharf.k9.ncl
+----

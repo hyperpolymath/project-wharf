@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# ECOSYSTEM.a2ml — Project Wharf ecosystem position
+[metadata]
+version = "1.0"
+last-updated = "2026-04-11"
+
+[project]
+name = "Project Wharf"
+purpose = "Sovereign web hypervisor providing database virtual sharding and file integrity for CMS platforms"
+role = "security-infrastructure"
+
+[position-in-ecosystem]
+category = ""
+
+[related-projects]
+projects = [
+  # No related projects recorded
+]

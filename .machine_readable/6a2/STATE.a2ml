@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# STATE.a2ml — Project Wharf project state
+[metadata]
+project = "project-wharf"
+version = "1.0.0"
+last-updated = "2025-01-12T09:00:00+00:00"
+status = "active"
+session = "converted from scheme — 2026-04-11"
+
+[project-context]
+name = "Project Wharf"
+purpose = """Sovereign Web Hypervisor - Database Virtual Sharding"""
+completion-percentage = 70
+
+[position]
+phase = "Alpha Development"   # design | implementation | testing | maintenance | archived
+maturity = "experimental"  # experimental | alpha | beta | production | lts
+
+[route-to-mvp]
+milestones = [
+  { name = "Project Wharf", completion = 75 },
+]
+
+[blockers-and-issues]
+issues = [
+  # No blockers recorded
+]
+
+[critical-next-actions]
+actions = [
+  "Wire mooring protocol to CLI",
+  "Add config loading to wharf-cli",
+  "Test nftables on production system",
+  "Test eBPF compilation with bpf-linker",
+  "Begin Nebula mesh VPN coordination",
+  "Complete Nebula integration",
+  "Performance optimization",
+]
+
+[maintenance-status]
+last-run-utc = "2025-01-12T09:00:00+00:00T00:00:00Z"
+last-result = "unknown"  # unknown | pass | warn | fail
