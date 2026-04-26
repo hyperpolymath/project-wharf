@@ -1,0 +1,26 @@
+# eclexiaiser manifest — energy/carbon resource budgets
+# SPDX-License-Identifier: PMPL-1.0-or-later
+
+[project]
+name = "project-wharf"
+
+[[functions]]
+name = "sync_to_remote"
+source = "crates/wharf-core/src/sync.rs"
+energy-budget-mj = 50.0
+carbon-budget-mg = 10.0
+
+[[functions]]
+name = "generate_hybrid_keypair"
+source = "crates/wharf-core/src/crypto.rs"
+energy-budget-mj = 30.0
+carbon-budget-mg = 6.0
+
+[carbon]
+provider = "static"
+region = "GB"
+static-intensity = 200.0
+
+[report]
+format = "text"
+include-recommendations = true
