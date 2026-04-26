@@ -1,54 +1,95 @@
-# Rust build artifacts
-/target/
-**/*.rs.bk
-Cargo.lock
+# SPDX-License-Identifier: PMPL-1.0
+# RSR-compliant .gitignore
 
-# Distribution/build outputs
-/dist/
-
-# Secrets and keys (NEVER commit these!)
-*.key
-*.pem
-infra/nebula/*.key
-infra/nebula/*.crt
-!infra/nebula/.gitkeep
-
-# Environment files
-.env
-.env.*
-!.env.example
-
-# Editor/IDE
-.vscode/
-.idea/
+# OS & Editor
+.DS_Store
+Thumbs.db
 *.swp
 *.swo
 *~
+.idea/
+.vscode/
 
-# OS files
-.DS_Store
-Thumbs.db
+# Build
+/target/
+/_build/
+/build/
+/dist/
+/out/
 
-# Variable files with secrets
-vars/*.json
-!vars/example.json
+# Dependencies
+/node_modules/
+/vendor/
+/deps/
+/.elixir_ls/
+
+# Rust
+# Cargo.lock  # Keep for binaries
+
+# Elixir
+/cover/
+/doc/
+*.ez
+erl_crash.dump
+
+# Julia
+*.jl.cov
+*.jl.mem
+/Manifest.toml
+
+# ReScript
+/lib/bs/
+/.bsb.lock
+
+# Python (SaltStack only)
+__pycache__/
+*.py[cod]
+.venv/
+
+# Ada/SPARK
+*.ali
+/obj/
+# /bin/ — NOT ignored: contains wharf-cli and yacht-agent source crates
+
+# Haskell
+/.stack-work/
+/dist-newstyle/
+
+# Chapel
+*.chpl.tmp.*
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+secrets/
+
+# Test/Coverage
+/coverage/
+htmlcov/
 
 # Logs
 *.log
-logs/
+/logs/
 
-# Temporary files
+# Temp
+/tmp/
 *.tmp
-*.temp
-.cache/
+*.bak
 
-# Coverage reports
-tarpaulin-report.html
-coverage/
+# Local deployment runtime data
+deploy/wharf-local/
+
+# AI/Sync artifacts
+ai-cli-crash-capture/
+.directory
+sync_report*.txt
 target/
 node_modules/
 _build/
 deps/
 .elixir_ls/
+.cache/
 build/
 dist/
