@@ -12,10 +12,18 @@
 //! - `wharf-cli`: Administrative interface for site lifecycle.
 //! - `wharf-api`: Integration layer for CI/CD pipelines.
 
-pub mod site;
-pub mod deployment;
-pub mod security;
-pub mod volumes;
+pub mod config;
+pub mod crypto;
+pub mod db_policy;
+pub mod errors;
+pub mod fleet;
+pub mod integrity;
+pub mod mooring;
+pub mod mooring_client;
+pub mod nebula;
+pub mod snapshot;
+pub mod sync;
+pub mod types;
 
 /// The semantic version of the wharf core engine.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
