@@ -50,6 +50,9 @@ ed448-goldilocks = { version = "0.14.0-pre.10", features = ["signing"] }
 # SHAKE3/SHA3 (FIPS 202)
 sha3 = "0.10"
 
+# SHA-256 (for snapshot payload digests)
+sha2 = "0.10"
+
 # XChaCha20-Poly1305 symmetric encryption
 chacha20poly1305 = "0.10"
 

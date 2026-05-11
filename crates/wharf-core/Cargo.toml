@@ -17,6 +17,7 @@ pqcrypto-mldsa = { workspace = true }
 pqcrypto-traits = { workspace = true }
 ed448-goldilocks = { workspace = true }
 sha3 = { workspace = true }
+sha2 = { workspace = true }
 chacha20poly1305 = { workspace = true }
 hkdf = { workspace = true }
 rand_chacha = { workspace = true }
@@ -28,6 +29,7 @@ reqwest = { workspace = true }
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = "0.9"
 toml = { workspace = true }
 
 # Error Handling
