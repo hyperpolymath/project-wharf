@@ -1,5 +1,5 @@
 #!/bin/bash -eu
-# SPDX-License-Identifier: PMPL-1.0
+# SPDX-License-Identifier: PMPL-1.0-or-later
 # SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
 #
 # ClusterFuzzLite build script for Rust fuzzing
