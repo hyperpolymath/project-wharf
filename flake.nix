@@ -3,6 +3,17 @@
 #
 # Project Wharf - Nix Flake
 # Reproducible development environment and builds
+#
+# Retained per standards#102 rule 3 (KEEP+DEP). guix.scm uses
+# cargo-build-system with no declared inputs; the sealed Containerfile
+# (Chainguard Wolfi) installs only `rust cargo pkgconf openssl-dev`.
+# This flake's devShell is therefore the SOLE source of: the
+# rust-overlay rustToolchain (with rust-src + rust-analyzer), the Rust
+# auditing/QA chain (cargo-audit, cargo-tarpaulin, cargo-watch),
+# task/build tooling (just, jq), DNS tooling (bind), security tooling
+# (nebula), docs (asciidoctor), linting (codespell, lychee), and the
+# container CLI (podman). Remove only once those are reachable via
+# Guix or the sealed container.
 
 {
   description = "Wharf - The Sovereign Web Hypervisor";
