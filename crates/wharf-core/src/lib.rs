@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
-
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 //! Project Wharf — High-Assurance WordPress Deployment Core.
 //!
 //! Wharf is a container-first deployment orchestrator for hardened 

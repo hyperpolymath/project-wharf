@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 = Contributing to Project Wharf
 :toc: left
 :icons: font
@@ -166,7 +168,6 @@ All source files must include SPDX headers:
 
 [source,rust]
 ----
-// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Your Name <email>
 ----
 

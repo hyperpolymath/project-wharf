@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
-
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 //! # Snapshot Subsystem
 //!
 //! Materialises state snapshots on disk under `<snapshot_dir>/<snapshot_id>/`,
