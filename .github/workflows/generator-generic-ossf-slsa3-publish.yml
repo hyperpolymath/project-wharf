@@ -15,17 +15,14 @@ on:
   workflow_dispatch:
   release:
     types: [created]
-
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
       digests: ${{ steps.hash.outputs.digests }}
-
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
       # ========================================================
       #
       # Step 1: Build your artifacts.
@@ -33,10 +30,9 @@ jobs:
       # ========================================================
       - name: Build artifacts
         run: |
-            # These are some amazing artifacts.
-            echo "artifact1" > artifact1
-            echo "artifact2" > artifact2
-
+          # These are some amazing artifacts.
+          echo "artifact1" > artifact1
+          echo "artifact2" > artifact2
       # ========================================================
       #
       # Step 2: Add a step to generate the provenance subjects
@@ -54,11 +50,10 @@ jobs:
           files=$(ls artifact*)
           # Generate the subjects (base64 encoded).
           echo "hashes=$(sha256sum $files | base64 -w0)" >> "${GITHUB_OUTPUT}"
-
   provenance:
     needs: [build]
     permissions:
-      actions: read   # To read the workflow path.
+      actions: read # To read the workflow path.
       id-token: write # To sign the provenance.
       contents: write # To add assets to a release.
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0

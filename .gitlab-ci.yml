@@ -10,22 +10,18 @@ stages:
   - test
   - security
   - release
-
 variables:
   CARGO_HOME: ${CI_PROJECT_DIR}/.cargo
   RUSTFLAGS: "-D warnings"
-
 # Cache Cargo dependencies
 cache:
   key: ${CI_COMMIT_REF_SLUG}
   paths:
     - .cargo/
     - target/
-
 # =============================================================================
 # VALIDATE STAGE
 # =============================================================================
-
 validate:docs:
   stage: validate
   image: alpine:latest
@@ -42,7 +38,6 @@ validate:docs:
           exit 1
         fi
       done
-
 validate:wellknown:
   stage: validate
   image: alpine:latest
@@ -57,7 +52,6 @@ validate:wellknown:
           exit 1
         fi
       done
-
 validate:spdx:
   stage: validate
   image: alpine:latest
@@ -71,11 +65,9 @@ validate:spdx:
         fi
       done
       echo "✓ All source files have SPDX headers"
-
 # =============================================================================
 # BUILD STAGE
 # =============================================================================
-
 build:rust:
   stage: build
   image: rust:latest
@@ -86,42 +78,35 @@ build:rust:
       - target/release/wharf
       - target/release/yacht-agent
     expire_in: 1 week
-
 build:check:
   stage: build
   image: rust:latest
   script:
     - cargo check --workspace
-
 # =============================================================================
 # TEST STAGE
 # =============================================================================
-
 test:unit:
   stage: test
   image: rust:latest
   script:
     - cargo test --workspace
   coverage: '/^\d+\.\d+% coverage/'
-
 test:fmt:
   stage: test
   image: rust:latest
   script:
     - rustup component add rustfmt
     - cargo fmt --check
-
 test:clippy:
   stage: test
   image: rust:latest
   script:
     - rustup component add clippy
     - cargo clippy --workspace -- -D warnings
-
 # =============================================================================
 # SECURITY STAGE
 # =============================================================================
-
 security:audit:
   stage: security
   image: rust:latest
@@ -129,7 +114,6 @@ security:audit:
     - cargo install cargo-audit
     - cargo audit
   allow_failure: true
-
 security:secrets:
   stage: security
   image: alpine:latest
@@ -141,11 +125,9 @@ security:secrets:
         exit 1
       fi
       echo "✓ No obvious secrets found"
-
 # =============================================================================
 # RELEASE STAGE
 # =============================================================================
-
 release:tag:
   stage: release
   image: rust:latest
@@ -157,11 +139,9 @@ release:tag:
     paths:
       - target/release/wharf
       - target/release/yacht-agent
-
 # =============================================================================
 # SCHEDULED JOBS
 # =============================================================================
-
 dependency:update:
   stage: security
   image: rust:latest
@@ -171,3 +151,8 @@ dependency:update:
   only:
     - schedules
   allow_failure: true
+trufflehog:
+  stage: security
+  image: trufflesecurity/trufflehog:latest
+  script:
+    - trufflehog git file://. --only-verified --fail

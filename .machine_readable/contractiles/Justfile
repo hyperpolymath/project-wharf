@@ -100,3 +100,6 @@ seal-images:
 # Run the demo script
 demo:
     bash scripts/demo.sh
+
+secret-scan-trufflehog:
+    @command -v trufflehog >/dev/null && trufflehog filesystem . --only-verified || true
