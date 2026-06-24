@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MPL-2.0
 # SPDX-FileCopyrightText: 2025 Jonathan D. A. Jewell <hyperpolymath>
 #
 # SSL/TLS Certificate Setup for Project Wharf
