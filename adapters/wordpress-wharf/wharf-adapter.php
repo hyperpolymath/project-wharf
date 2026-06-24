@@ -10,7 +10,7 @@
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: wharf-adapter
  *
- * SPDX-License-Identifier: GPL-2.0-or-later
+ * SPDX-License-Identifier: MPL-2.0
  *
  * This plugin is a thin adapter — it does NO security work itself.
  * All security enforcement is handled by the yacht-agent (a separate Rust daemon).

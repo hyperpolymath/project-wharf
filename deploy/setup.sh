@@ -104,7 +104,7 @@ if [ ! -f "$WHARF_ROOT/sites/$DOMAIN/html/wp-config.php" ]; then
     # Write wp-config.php pointing DB through the yacht-agent proxy
     cat > "$WHARF_ROOT/sites/$DOMAIN/html/wp-config.php" << 'WPEOF'
 <?php
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // WordPress configuration — DB routed through yacht-agent proxy
 
 define('DB_NAME', 'wordpress');
