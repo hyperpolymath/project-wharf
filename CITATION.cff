@@ -1,6 +1,6 @@
 # CITATION.cff - Citation File Format for wharf
 # https://citation-file-format.github.io/
-# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Palimpsest-0.5
+# SPDX-License-Identifier: MPL-2.0 OR LicenseRef-Palimpsest-0.5
 
 cff-version: 1.2.0
 title: "wharf"
