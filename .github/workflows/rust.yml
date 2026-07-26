@@ -11,6 +11,7 @@ env:
   CARGO_TERM_COLOR: always
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
