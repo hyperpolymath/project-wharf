@@ -33,7 +33,7 @@ validate:docs:
     - |
       echo "Checking RSR documentation requirements..."
       for file in README.adoc LICENSE.txt SECURITY.md CODE_OF_CONDUCT.adoc \
-                  CONTRIBUTING.adoc FUNDING.yml GOVERNANCE.adoc MAINTAINERS.md \
+                  .github/CONTRIBUTING.md FUNDING.yml GOVERNANCE.adoc MAINTAINERS.md \
                   .gitignore .gitattributes; do
         if [ -f "$file" ]; then
           echo "✓ $file"

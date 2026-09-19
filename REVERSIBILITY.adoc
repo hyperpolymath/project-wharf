@@ -213,4 +213,4 @@ fn test_policy_change_reversible() {
 
 * SECURITY.md - Security implications of reversibility
 * link:docs/ARCHITECTURE.md[ARCHITECTURE.md] - Technical implementation
-* CONTRIBUTING.adoc - How to contribute reversibility tests
+* .github/CONTRIBUTING.md - How to contribute reversibility tests
