@@ -35,7 +35,7 @@ Former maintainers who have stepped down but retain honorary status.
 
 === Becoming a Maintainer
 
-See CONTRIBUTING.adoc for the Tri-Perimeter Contribution Framework.
+See .github/CONTRIBUTING.md for the Tri-Perimeter Contribution Framework.
 
 See GOVERNANCE.adoc for the maintainer selection process.
 
