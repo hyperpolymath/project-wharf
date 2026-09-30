@@ -31,6 +31,9 @@ done
 unset _d
 MODE="${1:---auto}"
 
+# Write a launcher message to standard output with the [ProjectWharf] prefix.
+# Arguments:
+#   $1: Message to print.
 log() {
   echo "[ProjectWharf] $1"
 }
