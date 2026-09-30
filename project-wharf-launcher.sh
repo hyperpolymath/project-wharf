@@ -9,8 +9,21 @@ REPO_DIR="/var/mnt/eclipse/repos/project-wharf"
 # name lets another local user pre-create the pid file and choose which
 # process `stop` kills (CWE-377). Matches launch-scaffolder main's generator
 # (standards/launcher-standard_praxis.deed :pid-file-pattern/:log-file-pattern).
-PID_FILE="${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}}/launch-scaffolder/project-wharf/server.pid"
-LOG_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/launch-scaffolder/project-wharf/server.log"
+case "${XDG_RUNTIME_DIR:-}" in
+  /*) _pid_root=$XDG_RUNTIME_DIR ;;
+  *)
+    case "${XDG_STATE_HOME:-}" in
+      /*) _pid_root=$XDG_STATE_HOME ;;
+      *) _pid_root=$HOME/.local/state ;;
+    esac
+    ;;
+esac
+case "${XDG_STATE_HOME:-}" in
+  /*) _state_root=$XDG_STATE_HOME ;;
+  *) _state_root=$HOME/.local/state ;;
+esac
+PID_FILE="${_pid_root}/launch-scaffolder/project-wharf/server.pid"
+LOG_FILE="${_state_root}/launch-scaffolder/project-wharf/server.log"
 for _d in "$(dirname "$PID_FILE")" "$(dirname "$LOG_FILE")"; do
   mkdir -p "$_d"
   chmod 0700 "$_d"
