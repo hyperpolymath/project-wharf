@@ -5,8 +5,17 @@
 set -euo pipefail
 
 REPO_DIR="/var/mnt/eclipse/repos/project-wharf"
-PID_FILE="/tmp/project-wharf.pid"
-LOG_FILE="/tmp/project-wharf.log"
+# Per-user XDG state, not /tmp: a world-writable /tmp path with a predictable
+# name lets another local user pre-create the pid file and choose which
+# process `stop` kills (CWE-377). Matches launch-scaffolder main's generator
+# (standards/launcher-standard_praxis.deed :pid-file-pattern/:log-file-pattern).
+PID_FILE="${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}}/launch-scaffolder/project-wharf/server.pid"
+LOG_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/launch-scaffolder/project-wharf/server.log"
+for _d in "$(dirname "$PID_FILE")" "$(dirname "$LOG_FILE")"; do
+  mkdir -p "$_d"
+  chmod 0700 "$_d"
+done
+unset _d
 MODE="${1:---auto}"
 
 log() {
