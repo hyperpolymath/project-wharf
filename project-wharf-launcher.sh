@@ -5,10 +5,35 @@
 set -euo pipefail
 
 REPO_DIR="/var/mnt/eclipse/repos/project-wharf"
-PID_FILE="/tmp/project-wharf.pid"
-LOG_FILE="/tmp/project-wharf.log"
+# Per-user XDG state, not /tmp: a world-writable /tmp path with a predictable
+# name lets another local user pre-create the pid file and choose which
+# process `stop` kills (CWE-377). Matches launch-scaffolder main's generator
+# (standards/launcher-standard_praxis.deed :pid-file-pattern/:log-file-pattern).
+case "${XDG_RUNTIME_DIR:-}" in
+  /*) _pid_root=$XDG_RUNTIME_DIR ;;
+  *)
+    case "${XDG_STATE_HOME:-}" in
+      /*) _pid_root=$XDG_STATE_HOME ;;
+      *) _pid_root=$HOME/.local/state ;;
+    esac
+    ;;
+esac
+case "${XDG_STATE_HOME:-}" in
+  /*) _state_root=$XDG_STATE_HOME ;;
+  *) _state_root=$HOME/.local/state ;;
+esac
+PID_FILE="${_pid_root}/launch-scaffolder/project-wharf/server.pid"
+LOG_FILE="${_state_root}/launch-scaffolder/project-wharf/server.log"
+for _d in "$(dirname "$PID_FILE")" "$(dirname "$LOG_FILE")"; do
+  mkdir -p "$_d"
+  chmod 0700 "$_d"
+done
+unset _d
 MODE="${1:---auto}"
 
+# Write a launcher message to standard output with the [ProjectWharf] prefix.
+# Arguments:
+#   $1: Message to print.
 log() {
   echo "[ProjectWharf] $1"
 }
