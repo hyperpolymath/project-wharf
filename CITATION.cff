@@ -9,6 +9,7 @@ type: software
 authors:
   - family-names: "Polymath"
     given-names: "Hyper"
+    orcid: "https://orcid.org/0000-0002-3078-6652"
     email: "hyperpolymath@proton.me"
     affiliation: "Rhodium Standard / Independent Researcher"
 repository-code: "https://github.com/hyperpolymath/wharf"
