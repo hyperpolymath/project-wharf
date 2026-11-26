@@ -21,9 +21,11 @@ jobs:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Validate composer.json and composer.lock
+      if: hashFiles('composer.json') != ''
       run: composer validate --strict
 
     - name: Cache Composer packages
+      if: hashFiles('composer.json') != ''
       id: composer-cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
@@ -33,6 +35,7 @@ jobs:
           ${{ runner.os }}-php-
 
     - name: Install dependencies
+      if: hashFiles('composer.json') != ''
       run: composer install --prefer-dist --no-progress
 
     # Add a test script to composer.json, for instance: "test": "vendor/bin/phpunit"
