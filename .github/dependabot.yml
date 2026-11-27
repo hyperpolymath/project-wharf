@@ -3,6 +3,11 @@
 # Covers common ecosystems - remove unused ones for your project
 
 version: 2
+
+multi-ecosystem-groups:
+  js-locks:
+    schedule:
+      interval: "weekly"
 updates:
   # GitHub Actions - always include
   - package-ecosystem: "github-actions"
@@ -35,14 +40,14 @@ updates:
   # Node.js/npm
   - package-ecosystem: "npm"
     directory: "/"
-    schedule:
-      interval: "weekly"
+    multi-ecosystem-group: "js-locks"
+    patterns: ["*"]
 
-  # Bun (bun.lock): same directory and schedule as npm, so Dependabot keeps bun.lock in step
+  # Bun (bun.lock): in the js-locks group with npm, so one PR moves pnpm-lock.yaml and bun.lock together
   - package-ecosystem: "bun"
     directory: "/"
-    schedule:
-      interval: "weekly"
+    multi-ecosystem-group: "js-locks"
+    patterns: ["*"]
 
   # Python/pip
   - package-ecosystem: "pip"
