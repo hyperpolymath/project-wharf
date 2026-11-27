@@ -32,7 +32,7 @@
 | npm | Bun |
 | pnpm/yarn | Bun |
 | Go | Rust |
-| Python (general) | ReScript/Rust |
+| Python (general) | AffineScript/Rust |
 | Java/Kotlin | Rust/Tauri/Dioxus |
 | Swift | Tauri/Dioxus |
 | React Native | Tauri/Dioxus |
