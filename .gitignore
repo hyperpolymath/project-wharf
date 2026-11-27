@@ -93,3 +93,6 @@ deps/
 .cache/
 build/
 dist/
+
+# Local container volumes (never commit database data)
+/deploy/wharf-local/
